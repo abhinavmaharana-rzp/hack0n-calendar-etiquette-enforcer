@@ -147,7 +147,113 @@ async function handleHelpCommand({ ack, respond }) {
   });
 }
 
+// slack-bot/handlers/commands.js
+async function handleMeetingPrepCommand({ ack, command, respond }) {
+  await ack();
+  
+  try {
+    const userEmail = command.user_email;
+    
+    // Find user's meetings in next 24 hours
+    const now = new Date();
+    const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    
+    const meetings = await Meeting.find({
+      'attendees.email': userEmail,
+      startTime: { $gte: now, $lte: tomorrow },
+      status: 'scheduled'
+    }).sort({ startTime: 1 });
+    
+    if (meetings.length === 0) {
+      await respond({
+        text: '✨ You have no meetings in the next 24 hours. Enjoy your focus time!',
+        response_type: 'ephemeral'
+      });
+      return;
+    }
+    
+    // Build prep summary
+    const blocks = [
+      {
+        type: 'header',
+        text: {
+          type: 'plain_text',
+          text: '📚 Your Meeting Prep Sheet',
+          emoji: true
+        }
+      },
+      {
+        type: 'context',
+        elements: [
+          {
+            type: 'mrkdwn',
+            text: `You have *${meetings.length} meeting${meetings.length > 1 ? 's' : ''}* in the next 24 hours`
+          }
+        ]
+      },
+      {
+        type: 'divider'
+      }
+    ];
+    
+    // Add each meeting
+    for (const meeting of meetings) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*${meeting.summary}*\n⏰ ${formatTime(meeting.startTime)} (${getDuration(meeting)})\n\n*Agenda:*\n${truncate(meeting.agenda.purpose, 100)}`
+        },
+        accessory: {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Open in Calendar' },
+          url: `https://calendar.google.com/calendar/event?eid=${meeting.eventId}`
+        }
+      });
+      
+      // Add prep checklist
+      if (meeting.agenda.prereads) {
+        blocks.push({
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: `📖 *Pre-reads:* ${meeting.agenda.prereads}`
+            }
+          ]
+        });
+      }
+      
+      blocks.push({ type: 'divider' });
+    }
+    
+    // Add productivity tip
+    blocks.push({
+      type: 'context',
+      elements: [
+        {
+          type: 'mrkdwn',
+          text: '💡 *Tip:* Review agendas 10 minutes before each meeting for better prep'
+        }
+      ]
+    });
+    
+    await respond({
+      blocks,
+      response_type: 'ephemeral'
+    });
+    
+  } catch (error) {
+    logger.error('Error in meeting prep:', error);
+    await respond({
+      text: `❌ Error: ${error.message}`,
+      response_type: 'ephemeral'
+    });
+  }
+}
+
 module.exports = {
   handleStatsCommand,
-  handleHelpCommand
+  handleHelpCommand,
+  handleMeetingPrepCommand
 };

@@ -5,6 +5,7 @@ const UserStats = require('../models/UserStats');
 const calendarService = require('../services/calendarService');
 const badgeService = require('../services/badgeService');
 const logger = require('../utils/logger');
+const agendaAnalyzer = require('../services/agendaAnalyser')
 
 // Register new meeting (called from Google Add-on)
 router.post('/register', async (req, res) => {
@@ -126,6 +127,33 @@ function calculateAgendaScore(agendaParsed) {
 
   return score;
 }
+
+router.post('/validate-agenda', async (req, res) => {
+  try {
+    const { agenda } = req.body;
+    
+    if (!agenda) {
+      return res.status(400).json({ 
+        valid: false, 
+        error: 'Agenda is required' 
+      });
+    }
+    
+    // Analyze agenda quality
+    const analysis = agendaAnalyzer.analyzeAgenda(agenda);
+    
+    res.json({
+      valid: analysis.passed,
+      score: analysis.score,
+      breakdown: analysis.breakdown,
+      feedback: analysis.feedback,
+      suggestions: agendaAnalyzer.suggestImprovements(agenda)
+    });
+  } catch (error) {
+    logger.error('Error validating agenda:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 // Update RSVP
 router.post('/rsvp', async (req, res) => {

@@ -262,4 +262,88 @@ class ReminderService {
   }
 }
 
+async function sendContextualReminder(meeting, attendee) {
+  const context = await getAttendeeContext(attendee.email, meeting);
+  
+  // Customize message based on context
+  let message = `📅 *Reminder: ${meeting.summary}*\n\n`;
+  
+  // Add personal context
+  if (context.hasConflict) {
+    message += `⚠️ *Note:* You have a conflicting meeting at the same time.\n\n`;
+  }
+  
+  if (context.backToBackMeetings) {
+    message += `⏰ *Heads up:* This is back-to-back with your previous meeting.\n\n`;
+  }
+  
+  if (context.isRecurring && context.lastAttended === false) {
+    message += `👀 *FYI:* You missed the last occurrence of this recurring meeting.\n\n`;
+  }
+  
+  // Add meeting importance indicators
+  if (meeting.mandatoryAttendees.includes(attendee.email)) {
+    message += `🚨 *You're marked as a mandatory attendee*\n\n`;
+  }
+  
+  // Meeting details
+  message += `📍 *When:* ${formatDate(meeting.startTime)}\n`;
+  message += `⏱️ *Duration:* ${getDuration(meeting)}\n`;
+  
+  if (meeting.location) {
+    message += `🏢 *Where:* ${meeting.location}\n`;
+  }
+  
+  message += `\n*Agenda Preview:*\n${truncate(meeting.agenda.purpose, 150)}`;
+  
+  const slackUserId = await slackService.getSlackUserId(attendee.email);
+  
+  await slackService.sendDM(slackUserId, message);
+}
+
+async function getAttendeeContext(email, meeting) {
+  // Check for conflicts
+  const conflicts = await Meeting.find({
+    'attendees.email': email,
+    startTime: meeting.startTime,
+    eventId: { $ne: meeting.eventId }
+  });
+  
+  // Check back-to-back meetings
+  const previousMeeting = await Meeting.findOne({
+    'attendees.email': email,
+    endTime: meeting.startTime
+  });
+  
+  // Check recurring attendance
+  let lastAttended = null;
+  if (meeting.isRecurring) {
+    const previousOccurrence = await Meeting.findOne({
+      recurringEventId: meeting.recurringEventId,
+      startTime: { $lt: meeting.startTime },
+      'attendees.email': email
+    }).sort({ startTime: -1 });
+    
+    if (previousOccurrence) {
+      const attendee = previousOccurrence.attendees.find(a => a.email === email);
+      lastAttended = attendee?.responseStatus === 'accepted';
+    }
+  }
+  
+  return {
+    hasConflict: conflicts.length > 0,
+    backToBackMeetings: !!previousMeeting,
+    isRecurring: meeting.isRecurring,
+    lastAttended
+  };
+}
+
+function getDuration(meeting) {
+  const minutes = Math.round((meeting.endTime - meeting.startTime) / (1000 * 60));
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours}h ${mins > 0 ? mins + 'm' : ''}`;
+}
+
 module.exports = new ReminderService();
