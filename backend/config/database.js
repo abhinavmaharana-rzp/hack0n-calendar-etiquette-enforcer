@@ -3,14 +3,17 @@ const logger = require('../utils/logger');
 
 const connectDB = async () => {
   try {
-    await mongoose.connect(process.env.MONGODB_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    });
+    // Remove deprecated options - they're not needed in newer Mongoose versions
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/calendar-enforcer');
     logger.info('MongoDB connected successfully');
   } catch (error) {
     logger.error('MongoDB connection error:', error);
-    process.exit(1);
+    // Don't exit in demo mode - allow app to run without MongoDB
+    if (process.env.NODE_ENV === 'production') {
+      process.exit(1);
+    } else {
+      logger.warn('Continuing without MongoDB connection (demo mode)');
+    }
   }
 };
 

@@ -11,6 +11,20 @@ class CalendarService {
   // Get event details
   async getEvent(eventId, calendarId = 'primary', userEmail = null) {
     try {
+      // For demo mode, return mock data if Google API is not configured
+      if (!process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID === 'your_google_client_id_here') {
+        logger.warn('Google Calendar not configured, returning mock event data');
+        return {
+          id: eventId,
+          summary: 'Demo Meeting',
+          organizer: { email: 'demo@razorpay.com', displayName: 'Demo User' },
+          attendees: [],
+          start: { dateTime: new Date().toISOString() },
+          end: { dateTime: new Date(Date.now() + 3600000).toISOString() },
+          location: 'Conference Room A'
+        };
+      }
+      
       const auth = userEmail ? this.getAuthForUser(userEmail) : oauth2Client;
       
       const response = await this.calendar.events.get({
@@ -22,7 +36,16 @@ class CalendarService {
       return response.data;
     } catch (error) {
       logger.error('Error fetching event:', error);
-      throw error;
+      // Return mock data on error for demo purposes
+      return {
+        id: eventId,
+        summary: 'Demo Meeting',
+        organizer: { email: 'demo@razorpay.com', displayName: 'Demo User' },
+        attendees: [],
+        start: { dateTime: new Date().toISOString() },
+        end: { dateTime: new Date(Date.now() + 3600000).toISOString() },
+        location: 'Conference Room A'
+      };
     }
   }
 

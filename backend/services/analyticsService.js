@@ -154,6 +154,108 @@ class AnalyticsService {
     }
   }
 
+  // Get team comparison data
+  async getTeamComparison(avgSalary = 100000) {
+    try {
+      // Get department stats from UserStats
+      const departmentStats = await UserStats.aggregate([
+        {
+          $group: {
+            _id: '$department',
+            avgAgendaScore: { $avg: '$agendaScore' },
+            avgRSVPScore: { $avg: '$rsvpScore' },
+            avgGhostScore: { $avg: '$ghostScore' },
+            totalUsers: { $sum: 1 },
+            userEmails: { $push: '$email' }
+          }
+        }
+      ]);
+
+      // Get meeting stats per department
+      const meetings = await Meeting.find({});
+      const WORKING_HOURS_PER_YEAR = 2080;
+      const HOUR_RATE = avgSalary / WORKING_HOURS_PER_YEAR;
+
+      // Calculate metrics per department
+      const teamData = departmentStats.map(dept => {
+        const deptEmails = dept.userEmails || [];
+        const deptMeetings = meetings.filter(m => 
+          m.creator && deptEmails.includes(m.creator) ||
+          m.attendees.some(a => deptEmails.includes(a.email))
+        );
+
+        let totalCost = 0;
+        let totalDuration = 0;
+        let meetingsWithAgenda = 0;
+        let totalRSVPs = 0;
+        let totalAttendees = 0;
+
+        deptMeetings.forEach(meeting => {
+          const duration = (meeting.endTime - meeting.startTime) / (1000 * 60 * 60); // hours
+          const attendeeCount = meeting.attendees.length;
+          const meetingCost = HOUR_RATE * duration * attendeeCount;
+
+          totalCost += meetingCost;
+          totalDuration += duration;
+          
+          if (meeting.agenda?.raw) {
+            meetingsWithAgenda++;
+          }
+
+          totalAttendees += attendeeCount;
+          totalRSVPs += meeting.attendees.filter(a => 
+            a.responseStatus !== 'needsAction'
+          ).length;
+        });
+
+        const agendaCompliance = deptMeetings.length > 0
+          ? Math.round((meetingsWithAgenda / deptMeetings.length) * 100)
+          : 0;
+
+        const rsvpRate = totalAttendees > 0
+          ? Math.round((totalRSVPs / totalAttendees) * 100)
+          : 0;
+
+        const avgDuration = deptMeetings.length > 0
+          ? Math.round(totalDuration / deptMeetings.length * 60) // minutes
+          : 0;
+
+        const meetingFrequency = deptMeetings.length; // total meetings
+
+        const overallScore = Math.round(
+          (dept.avgAgendaScore * 0.3) +
+          (dept.avgRSVPScore * 0.4) +
+          ((100 - dept.avgGhostScore) * 0.3)
+        );
+
+        return {
+          department: dept._id || 'Unknown',
+          totalUsers: dept.totalUsers,
+          avgAgendaScore: Math.round(dept.avgAgendaScore || 0),
+          avgRSVPScore: Math.round(dept.avgRSVPScore || 0),
+          avgGhostScore: Math.round(dept.avgGhostScore || 0),
+          overallScore,
+          agendaCompliance,
+          rsvpRate,
+          avgDuration,
+          meetingFrequency,
+          totalCost: Math.round(totalCost),
+          avgCostPerMeeting: deptMeetings.length > 0 
+            ? Math.round(totalCost / deptMeetings.length) 
+            : 0
+        };
+      });
+
+      // Sort by overall score
+      teamData.sort((a, b) => b.overallScore - a.overallScore);
+
+      return teamData;
+    } catch (error) {
+      logger.error('Error getting team comparison:', error);
+      throw error;
+    }
+  }
+
   // Get meeting efficiency metrics
   async getMeetingEfficiency() {
     try {
@@ -216,6 +318,171 @@ class AnalyticsService {
       return roomStats;
     } catch (error) {
       logger.error('Error getting room usage stats:', error);
+      throw error;
+    }
+  }
+
+  // Get cost analysis
+  async getCostAnalysis(avgSalary = 100000, startDate = null, endDate = null) {
+    try {
+      const dateFilter = {};
+      if (startDate) dateFilter.$gte = new Date(startDate);
+      if (endDate) dateFilter.$lte = new Date(endDate);
+
+      const query = startDate || endDate ? { createdAt: dateFilter } : {};
+      const meetings = await Meeting.find(query);
+
+      // Constants
+      const WORKING_HOURS_PER_YEAR = 2080; // 40 hours/week * 52 weeks
+      const HOUR_RATE = avgSalary / WORKING_HOURS_PER_YEAR;
+
+      let totalCost = 0;
+      let totalAttendeeHours = 0;
+      let totalMeetings = meetings.length;
+      let cancelledMeetings = 0;
+      let cancelledCost = 0;
+      const departmentCosts = {};
+      const monthlyCosts = {};
+
+      meetings.forEach(meeting => {
+        const duration = (meeting.endTime - meeting.startTime) / (1000 * 60 * 60); // hours
+        const attendeeCount = meeting.attendees.length;
+        const meetingCost = HOUR_RATE * duration * attendeeCount;
+
+        totalCost += meetingCost;
+        totalAttendeeHours += duration * attendeeCount;
+
+        if (meeting.status === 'auto-cancelled') {
+          cancelledMeetings++;
+          cancelledCost += meetingCost;
+        }
+
+        // Monthly breakdown
+        const monthKey = new Date(meeting.startTime).toISOString().substring(0, 7); // YYYY-MM
+        if (!monthlyCosts[monthKey]) {
+          monthlyCosts[monthKey] = 0;
+        }
+        monthlyCosts[monthKey] += meetingCost;
+
+        // Department costs (if available)
+        meeting.attendees.forEach(attendee => {
+          const email = attendee.email || '';
+          const domain = email.split('@')[1] || 'unknown';
+          if (!departmentCosts[domain]) {
+            departmentCosts[domain] = { cost: 0, meetings: 0 };
+          }
+          departmentCosts[domain].cost += meetingCost / attendeeCount; // Split cost per attendee
+          if (departmentCosts[domain].meetings === 0) {
+            departmentCosts[domain].meetings = 1;
+          }
+        });
+      });
+
+      const avgCostPerMeeting = totalMeetings > 0 ? totalCost / totalMeetings : 0;
+      const avgCostPerAttendeeHour = totalAttendeeHours > 0 ? totalCost / totalAttendeeHours : 0;
+      const savingsFromCancelled = cancelledCost;
+      const efficiencyScore = totalMeetings > 0 
+        ? Math.round((1 - (cancelledMeetings / totalMeetings)) * 100) 
+        : 100;
+
+      // Convert monthly costs to array for charts
+      const monthlyData = Object.entries(monthlyCosts)
+        .map(([month, cost]) => ({ month, cost: Math.round(cost) }))
+        .sort((a, b) => a.month.localeCompare(b.month));
+
+      // Convert department costs to array
+      const departmentData = Object.entries(departmentCosts)
+        .map(([department, data]) => ({
+          department,
+          cost: Math.round(data.cost),
+          meetings: data.meetings
+        }))
+        .sort((a, b) => b.cost - a.cost)
+        .slice(0, 10); // Top 10
+
+      return {
+        totalCost: Math.round(totalCost),
+        avgCostPerMeeting: Math.round(avgCostPerMeeting),
+        avgCostPerAttendeeHour: Math.round(avgCostPerAttendeeHour * 100) / 100,
+        totalMeetings,
+        totalAttendeeHours: Math.round(totalAttendeeHours * 100) / 100,
+        cancelledMeetings,
+        savingsFromCancelled: Math.round(savingsFromCancelled),
+        efficiencyScore,
+        monthlyData,
+        departmentData,
+        avgSalary,
+        hourRate: Math.round(HOUR_RATE * 100) / 100
+      };
+    } catch (error) {
+      logger.error('Error getting cost analysis:', error);
+      throw error;
+    }
+  }
+
+  // Get meeting heatmap data
+  async getMeetingHeatmapData(startDate = null, endDate = null) {
+    try {
+      const dateFilter = {};
+      if (startDate) dateFilter.$gte = new Date(startDate);
+      if (endDate) dateFilter.$lte = new Date(endDate);
+
+      const query = startDate || endDate ? { createdAt: dateFilter } : {};
+      const meetings = await Meeting.find(query);
+
+      // Initialize heatmap: 7 days x 24 hours
+      const heatmap = {};
+      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+      // Initialize all cells
+      days.forEach(day => {
+        for (let hour = 0; hour < 24; hour++) {
+          const key = `${day}-${hour}`;
+          heatmap[key] = {
+            day,
+            hour,
+            count: 0,
+            meetings: []
+          };
+        }
+      });
+
+      // Populate heatmap
+      meetings.forEach(meeting => {
+        const start = new Date(meeting.startTime);
+        const dayName = days[start.getDay()];
+        const hour = start.getHours();
+        const key = `${dayName}-${hour}`;
+
+        if (heatmap[key]) {
+          heatmap[key].count++;
+          heatmap[key].meetings.push({
+            title: meeting.summary,
+            duration: (meeting.endTime - meeting.startTime) / (1000 * 60), // minutes
+            attendees: meeting.attendees.length
+          });
+        }
+      });
+
+      // Convert to array format for frontend
+      const heatmapData = [];
+      days.forEach(day => {
+        for (let hour = 0; hour < 24; hour++) {
+          const key = `${day}-${hour}`;
+          heatmapData.push(heatmap[key]);
+        }
+      });
+
+      // Calculate max count for normalization
+      const maxCount = Math.max(...heatmapData.map(d => d.count), 1);
+
+      return {
+        heatmapData,
+        maxCount,
+        totalMeetings: meetings.length
+      };
+    } catch (error) {
+      logger.error('Error getting meeting heatmap data:', error);
       throw error;
     }
   }

@@ -3,8 +3,17 @@ const EmailSlackMap = require('../models/EmailSlackMap');
 const logger = require('../utils/logger');
 
 class SlackService {
+  // Check if Slack is configured
+  isConfigured() {
+    return slackClient !== null;
+  }
+
   // Get Slack user ID from email
   async getSlackUserId(email) {
+    if (!this.isConfigured()) {
+      return null;
+    }
+    
     try {
       // Check cache first
       const cached = await EmailSlackMap.findOne({ email });
@@ -42,6 +51,11 @@ class SlackService {
 
   // Send DM
   async sendDM(userId, blocks, text = '') {
+    if (!this.isConfigured()) {
+      logger.warn('Slack not configured, skipping DM');
+      return false;
+    }
+    
     try {
       const result = await slackClient.chat.postMessage({
         channel: userId,
@@ -221,6 +235,11 @@ class SlackService {
 
   // Bulk sync all users
   async syncAllUsers() {
+    if (!this.isConfigured()) {
+      logger.warn('Slack not configured, cannot sync users');
+      return 0;
+    }
+    
     try {
       let cursor;
       let totalSynced = 0;

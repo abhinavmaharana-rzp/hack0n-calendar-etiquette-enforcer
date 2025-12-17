@@ -7,7 +7,7 @@ const EmailSlackMapSchema = new mongoose.Schema({
   lastSynced: { type: Date, default: Date.now }
 });
 
-EmailSlackMapSchema.index({ email: 1 });
+// Indexes (email already has unique: true, so don't duplicate)
 EmailSlackMapSchema.index({ slackUserId: 1 });
 
 module.exports = mongoose.model('EmailSlackMap', EmailSlackMapSchema);

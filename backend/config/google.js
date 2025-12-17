@@ -11,24 +11,41 @@ const oauth2Client = new google.auth.OAuth2(
 // Service Account (for domain-wide delegation)
 let serviceAccountAuth = null;
 if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
-  const keyFile = JSON.parse(
-    fs.readFileSync(process.env.GOOGLE_SERVICE_ACCOUNT_KEY, 'utf8')
-  );
-  
-  serviceAccountAuth = new google.auth.JWT({
-    email: keyFile.client_email,
-    key: keyFile.private_key,
-    scopes: [
-      'https://www.googleapis.com/auth/calendar',
-      'https://www.googleapis.com/auth/calendar.events',
-      'https://www.googleapis.com/auth/admin.directory.user.readonly'
-    ],
-    subject: process.env.GOOGLE_ADMIN_EMAIL // Admin email for domain-wide delegation
-  });
+  try {
+    const keyFilePath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+    // Handle both relative and absolute paths
+    const resolvedPath = keyFilePath.startsWith('./') 
+      ? keyFilePath.replace('./backend/', './')
+      : keyFilePath;
+    
+    if (fs.existsSync(resolvedPath)) {
+      const keyFile = JSON.parse(
+        fs.readFileSync(resolvedPath, 'utf8')
+      );
+      
+      serviceAccountAuth = new google.auth.JWT({
+        email: keyFile.client_email,
+        key: keyFile.private_key,
+        scopes: [
+          'https://www.googleapis.com/auth/calendar',
+          'https://www.googleapis.com/auth/calendar.events',
+          'https://www.googleapis.com/auth/admin.directory.user.readonly'
+        ],
+        subject: process.env.GOOGLE_ADMIN_EMAIL // Admin email for domain-wide delegation
+      });
+    } else {
+      console.warn(`⚠️  Google service account file not found: ${resolvedPath}. Google Calendar features will be limited.`);
+    }
+  } catch (error) {
+    console.warn(`⚠️  Error loading Google service account: ${error.message}. Google Calendar features will be limited.`);
+  }
 }
 
+// Initialize calendar and admin APIs (will work even without full auth for demo)
 const calendar = google.calendar({ version: 'v3', auth: oauth2Client });
-const adminDirectory = google.admin({ version: 'directory_v1', auth: serviceAccountAuth });
+const adminDirectory = serviceAccountAuth 
+  ? google.admin({ version: 'directory_v1', auth: serviceAccountAuth })
+  : null;
 
 module.exports = {
   oauth2Client,

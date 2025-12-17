@@ -77,4 +77,43 @@ router.get('/badges', async (req, res) => {
   }
 });
 
+// Get cost analysis
+router.get('/cost-analysis', async (req, res) => {
+  try {
+    const avgSalary = parseFloat(req.query.avgSalary) || 100000;
+    const startDate = req.query.startDate || null;
+    const endDate = req.query.endDate || null;
+    const costAnalysis = await analyticsService.getCostAnalysis(avgSalary, startDate, endDate);
+    res.json({ success: true, ...costAnalysis });
+  } catch (error) {
+    logger.error('Error fetching cost analysis:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get meeting heatmap data
+router.get('/heatmap', async (req, res) => {
+  try {
+    const startDate = req.query.startDate || null;
+    const endDate = req.query.endDate || null;
+    const heatmapData = await analyticsService.getMeetingHeatmapData(startDate, endDate);
+    res.json({ success: true, ...heatmapData });
+  } catch (error) {
+    logger.error('Error fetching heatmap data:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get team comparison
+router.get('/teams', async (req, res) => {
+  try {
+    const avgSalary = parseFloat(req.query.avgSalary) || 100000;
+    const teamData = await analyticsService.getTeamComparison(avgSalary);
+    res.json({ success: true, teams: teamData });
+  } catch (error) {
+    logger.error('Error fetching team comparison:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

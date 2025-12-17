@@ -26,6 +26,7 @@ app.use('/api/events', require('./routes/events'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/webhooks', require('./routes/webhooks'));
 app.use('/api/admin', require('./routes/admin'));
+app.use('/api/demo', require('./routes/demo'));
 
 // Health check
 app.get('/health', (req, res) => {
@@ -63,8 +64,30 @@ async function start() {
     reminderService.start();
     logger.info('Reminder service started');
 
-    // Start Slack bot (in separate process)
-    require('../slack-bot/app');
+    // Start Slack bot (optional - skip if not configured)
+    try {
+      const hasValidToken = process.env.SLACK_BOT_TOKEN && 
+                           process.env.SLACK_BOT_TOKEN !== 'xoxb-your-bot-token-here' &&
+                           process.env.SLACK_BOT_TOKEN.startsWith('xoxb-');
+      
+      if (hasValidToken && process.env.SLACK_APP_TOKEN) {
+        // Start Slack bot in a separate process to avoid blocking
+        setTimeout(() => {
+          try {
+            require('../slack-bot/app');
+            logger.info('Slack bot started');
+          } catch (slackError) {
+            logger.warn('Slack bot failed to start:', slackError.message);
+            logger.info('Continuing without Slack bot (demo mode)');
+          }
+        }, 1000);
+      } else {
+        logger.info('Slack bot skipped (not configured)');
+      }
+    } catch (error) {
+      logger.warn('Slack bot initialization error:', error.message);
+      logger.info('Continuing without Slack bot (demo mode)');
+    }
 
     // Start Express server
     app.listen(PORT, () => {

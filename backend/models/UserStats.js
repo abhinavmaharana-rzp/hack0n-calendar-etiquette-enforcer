@@ -38,8 +38,7 @@ const UserStatsSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes
-UserStatsSchema.index({ email: 1 });
+// Indexes (email already has unique: true, so don't duplicate)
 UserStatsSchema.index({ agendaScore: -1 });
 UserStatsSchema.index({ rsvpScore: -1 });
 UserStatsSchema.index({ ghostScore: -1 });

@@ -65,8 +65,7 @@ const MeetingSchema = new mongoose.Schema({
   timestamps: true
 });
 
-// Indexes
-MeetingSchema.index({ eventId: 1 });
+// Indexes (eventId already has unique: true, so don't duplicate)
 MeetingSchema.index({ creator: 1 });
 MeetingSchema.index({ startTime: 1, status: 1 });
 MeetingSchema.index({ 'attendees.email': 1 });

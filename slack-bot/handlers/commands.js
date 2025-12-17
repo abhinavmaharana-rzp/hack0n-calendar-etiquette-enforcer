@@ -1,4 +1,5 @@
 const UserStats = require('../../backend/models/UserStats');
+const Meeting = require('../../backend/models/Meeting');
 const badgeService = require('../../backend/services/badgeService');
 const logger = require('../../backend/utils/logger');
 
@@ -250,6 +251,28 @@ async function handleMeetingPrepCommand({ ack, command, respond }) {
       response_type: 'ephemeral'
     });
   }
+}
+
+// Helper functions
+function formatTime(date) {
+  return new Date(date).toLocaleString('en-IN', {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  });
+}
+
+function getDuration(meeting) {
+  const minutes = Math.round((meeting.endTime - meeting.startTime) / (1000 * 60));
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${hours}h ${mins > 0 ? mins + 'm' : ''}`;
+}
+
+function truncate(text, maxLength) {
+  if (!text) return 'No agenda provided';
+  if (text.length <= maxLength) return text;
+  return text.substring(0, maxLength) + '...';
 }
 
 module.exports = {

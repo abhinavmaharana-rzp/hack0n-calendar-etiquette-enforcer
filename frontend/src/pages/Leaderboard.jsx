@@ -1,5 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { getLeaderboard, getBadges } from '../utils/api';
+import Toast from '../components/Toast';
+import Tooltip from '../components/Tooltip';
+import RefreshButton from '../components/RefreshButton';
+import EmptyState from '../components/EmptyState';
 
 function Leaderboard() {
   const [users, setUsers] = useState([]);
@@ -7,6 +11,7 @@ function Leaderboard() {
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState('overall'); // overall, agenda, rsvp, ghost
   const [searchQuery, setSearchQuery] = useState('');
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -19,10 +24,13 @@ function Leaderboard() {
         getLeaderboard(50),
         getBadges()
       ]);
-      setUsers(leaderboardData.leaderboard);
-      setBadges(badgesData.badges);
+      setUsers(leaderboardData.leaderboard || []);
+      setBadges(badgesData.badges || {});
     } catch (err) {
       console.error('Error loading leaderboard:', err);
+      // Show empty state on error
+      setUsers([]);
+      setBadges({});
     } finally {
       setLoading(false);
     }
@@ -55,14 +63,67 @@ function Leaderboard() {
     );
   }
 
+  const exportLeaderboard = () => {
+    const csv = [
+      ['Rank', 'Name', 'Email', 'Overall Score', 'Agenda Score', 'RSVP Score', 'Ghost Score', 'Badges'].join(','),
+      ...filteredUsers.map((user, index) => [
+        index + 1,
+        user.name,
+        user.email,
+        user.overallScore,
+        user.agendaScore,
+        user.rsvpScore,
+        user.ghostScore,
+        user.badges.join(';')
+      ].join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `leaderboard-${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+    setToast({ message: 'Leaderboard exported successfully!', type: 'success' });
+  };
+
   return (
     <div className="space-y-6">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      
       {/* Header */}
-      <div>
-        <h2 className="text-3xl font-bold text-gray-900">🏆 Leaderboard</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Top calendar citizens at Razorpay
-        </p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h2 className="text-3xl font-bold text-gray-900 bg-gradient-to-r from-yellow-500 to-orange-500 bg-clip-text text-transparent">
+            🏆 Leaderboard
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Top calendar citizens at Razorpay
+          </p>
+        </div>
+        <div className="flex items-center space-x-3">
+          <RefreshButton onRefresh={loadData} isLoading={loading} />
+          {filteredUsers.length > 0 && (
+            <Tooltip text="Export leaderboard data to CSV">
+              <button
+                onClick={exportLeaderboard}
+                className="bg-primary text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-all transform hover:scale-105 shadow-md flex items-center space-x-2"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span>Export CSV</span>
+              </button>
+            </Tooltip>
+          )}
+        </div>
       </div>
 
       {/* Search and Filter */}
@@ -235,15 +296,17 @@ function Leaderboard() {
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
-                    <span
-                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        user.ghostScore > 5
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}
-                    >
-                      {user.ghostScore}
-                    </span>
+                  <span
+                    className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-colors ${
+                      user.ghostScore > 5
+                        ? 'bg-red-100 text-red-800'
+                        : user.ghostScore > 2
+                        ? 'bg-yellow-100 text-yellow-800'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}
+                  >
+                    {user.ghostScore}
+                  </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-right">
                     <span className="text-lg font-bold text-gray-900">
@@ -258,7 +321,30 @@ function Leaderboard() {
 
         {filteredUsers.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-gray-500">No users found matching your search.</p>
+            {searchQuery ? (
+              <p className="text-gray-500">No users found matching your search.</p>
+            ) : (
+              <EmptyState
+                icon="🏆"
+                title="No leaderboard data yet"
+                message="Load demo data to see the leaderboard in action!"
+                actionLabel="🚀 Load Demo Data"
+                onAction={async () => {
+                  try {
+                    const response = await fetch('http://localhost:5000/api/demo/seed', { method: 'POST' });
+                    if (response.ok) {
+                      setToast({ message: 'Demo data loaded successfully!', type: 'success' });
+                      loadData();
+                    } else {
+                      setToast({ message: 'Failed to load demo data', type: 'error' });
+                    }
+                  } catch (err) {
+                    setToast({ message: 'Error loading demo data', type: 'error' });
+                    console.error(err);
+                  }
+                }}
+              />
+            )}
           </div>
         )}
       </div>

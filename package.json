@@ -1,0 +1,26 @@
+{
+  "name": "calendar-etiquette-enforcer",
+  "version": "1.0.0",
+  "description": "Improving meeting hygiene at Razorpay through intelligent automation, gamification, and humor!",
+  "scripts": {
+    "install:all": "cd backend && npm install && cd ../frontend && npm install && cd ../slack-bot && npm install",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "demo:seed": "curl -X POST http://localhost:5000/api/demo/seed",
+    "demo:clear": "curl -X DELETE http://localhost:5000/api/demo/clear",
+    "start": "echo 'Starting Calendar Etiquette Enforcer...' && echo 'Backend: http://localhost:5000' && echo 'Frontend: http://localhost:3000' && echo 'Run: npm run dev:backend (Terminal 1) and npm run dev:frontend (Terminal 2)'"
+  },
+  "keywords": [
+    "calendar",
+    "meetings",
+    "slack",
+    "google-calendar",
+    "razorpay",
+    "hackathon",
+    "automation",
+    "gamification"
+  ],
+  "author": "Abhinav",
+  "license": "MIT"
+}
+

@@ -56,6 +56,26 @@ export const getBadges = async () => {
   return await api.get('/dashboard/badges');
 };
 
+export const getCostAnalysis = async (avgSalary = 100000, startDate = null, endDate = null) => {
+  const params = new URLSearchParams();
+  params.append('avgSalary', avgSalary);
+  if (startDate) params.append('startDate', startDate);
+  if (endDate) params.append('endDate', endDate);
+  return await api.get(`/dashboard/cost-analysis?${params.toString()}`);
+};
+
+export const getHeatmapData = async (startDate = null, endDate = null) => {
+  const params = new URLSearchParams();
+  if (startDate) params.append('startDate', startDate);
+  if (endDate) params.append('endDate', endDate);
+  const queryString = params.toString();
+  return await api.get(`/dashboard/heatmap${queryString ? `?${queryString}` : ''}`);
+};
+
+export const getTeamComparison = async (avgSalary = 100000) => {
+  return await api.get(`/dashboard/teams?avgSalary=${avgSalary}`);
+};
+
 // Event APIs
 export const getMeeting = async (eventId) => {
   return await api.get(`/events/${eventId}`);
@@ -67,6 +87,15 @@ export const registerMeeting = async (data) => {
 
 export const updateRSVP = async (data) => {
   return await api.post('/events/rsvp', data);
+};
+
+export const suggestAgenda = async (meetingTitle, attendeeCount, duration, meetingType) => {
+  return await api.post('/events/suggest-agenda', {
+    meetingTitle,
+    attendeeCount,
+    duration,
+    meetingType
+  });
 };
 
 export default api;

@@ -28,14 +28,14 @@ router.post('/register', async (req, res) => {
     // Parse agenda
     const agendaParsed = {
       raw: agenda,
-      purpose: this.extractSection(agenda, '📍 Purpose:', '🎯'),
-      outcomes: this.extractSection(agenda, '🎯 Expected Outcomes:', '⚡'),
-      decisions: this.extractSection(agenda, '⚡ Decisions Needed:', '📌'),
-      prereads: this.extractSection(agenda, '📌 Pre-reads')
+      purpose: extractSection(agenda, '📍 Purpose:', '🎯'),
+      outcomes: extractSection(agenda, '🎯 Expected Outcomes:', '⚡'),
+      decisions: extractSection(agenda, '⚡ Decisions Needed:', '📌'),
+      prereads: extractSection(agenda, '📌 Pre-reads')
     };
 
     // Calculate agenda quality score
-    const agendaScore = this.calculateAgendaScore(agendaParsed);
+    const agendaScore = calculateAgendaScore(agendaParsed);
 
     // Create meeting record
     const meeting = new Meeting({
@@ -211,6 +211,29 @@ router.get('/:eventId', async (req, res) => {
     res.json({ success: true, meeting });
   } catch (error) {
     logger.error('Error fetching meeting:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Suggest agenda
+router.post('/suggest-agenda', async (req, res) => {
+  try {
+    const { meetingTitle, attendeeCount, duration, meetingType } = req.body;
+
+    if (!meetingTitle) {
+      return res.status(400).json({ error: 'Meeting title is required' });
+    }
+
+    const suggestions = agendaAnalyzer.suggestAgenda(
+      meetingTitle,
+      attendeeCount || 5,
+      duration || 30,
+      meetingType
+    );
+
+    res.json({ success: true, suggestions });
+  } catch (error) {
+    logger.error('Error suggesting agenda:', error);
     res.status(500).json({ error: error.message });
   }
 });

@@ -1,21 +1,46 @@
 import React, { useState, useEffect } from 'react';
-import { getRoomStats } from '../utils/api';
+import { getRoomStats, getHeatmapData } from '../utils/api';
+import Toast from '../components/Toast';
+import RefreshButton from '../components/RefreshButton';
+import EmptyState from '../components/EmptyState';
+import CalendarHeatmap from '../components/Analytics/CalendarHeatmap';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
+} from 'recharts';
 
 function Analytics() {
   const [roomStats, setRoomStats] = useState([]);
+  const [heatmapData, setHeatmapData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
-    loadRoomStats();
+    loadData();
   }, []);
 
-  const loadRoomStats = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const data = await getRoomStats();
-      setRoomStats(data.roomStats);
+      const [roomData, heatmap] = await Promise.all([
+        getRoomStats(),
+        getHeatmapData()
+      ]);
+      setRoomStats(roomData.roomStats || []);
+      setHeatmapData(heatmap);
     } catch (err) {
-      console.error('Error loading room stats:', err);
+      console.error('Error loading analytics:', err);
+      setRoomStats([]);
+      setHeatmapData(null);
     } finally {
       setLoading(false);
     }
@@ -29,14 +54,43 @@ function Analytics() {
     );
   }
 
+  // Prepare data for charts
+  const roomEfficiencyData = roomStats.map(room => ({
+    name: room._id.length > 20 ? room._id.substring(0, 20) + '...' : room._id,
+    efficiency: Math.round((room.completed / room.totalBookings) * 100),
+    total: room.totalBookings,
+    completed: room.completed,
+    cancelled: room.autoCancelled
+  }));
+
+  const pieData = [
+    { name: 'Completed', value: roomStats.reduce((sum, r) => sum + r.completed, 0) },
+    { name: 'Auto-Cancelled', value: roomStats.reduce((sum, r) => sum + r.autoCancelled, 0) }
+  ];
+
+  const COLORS = ['#10b981', '#ef4444'];
+
   return (
     <div className="space-y-6">
+      {toast && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(null)}
+        />
+      )}
+      
       {/* Header */}
-      <div>
-        <h2 className="text-3xl font-bold text-gray-900">📊 Analytics</h2>
-        <p className="mt-1 text-sm text-gray-500">
-          Deep dive into meeting room usage and efficiency
-        </p>
+      <div className="flex justify-between items-start">
+        <div>
+          <h2 className="text-3xl font-bold text-gray-900 bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
+            📊 Analytics
+          </h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Deep dive into meeting room usage and efficiency
+          </p>
+        </div>
+        <RefreshButton onRefresh={loadData} isLoading={loading} />
       </div>
 
       {/* Summary Cards */}
@@ -85,8 +139,77 @@ function Analytics() {
         </div>
       </div>
 
+      {/* Calendar Heatmap */}
+      {heatmapData && (
+        <CalendarHeatmap
+          heatmapData={heatmapData.heatmapData}
+          maxCount={heatmapData.maxCount}
+          totalMeetings={heatmapData.totalMeetings}
+        />
+      )}
+
+      {/* Charts Section */}
+      {roomStats.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Room Efficiency Bar Chart */}
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Room Efficiency by Usage
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={roomEfficiencyData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis 
+                  dataKey="name" 
+                  angle={-45}
+                  textAnchor="end"
+                  height={100}
+                  tick={{ fill: '#6b7280', fontSize: 12 }}
+                />
+                <YAxis tick={{ fill: '#6b7280', fontSize: 12 }} />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#fff', 
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px'
+                  }}
+                />
+                <Legend />
+                <Bar dataKey="efficiency" fill="#8b5cf6" name="Efficiency %" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Meeting Status Pie Chart */}
+          <div className="bg-white rounded-xl shadow-lg p-6">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">
+              Meeting Status Distribution
+            </h3>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={100}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {pieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
+
       {/* Room Usage Stats Table */}
-      <div className="bg-white shadow rounded-lg overflow-hidden">
+      <div className="bg-white shadow-lg rounded-xl overflow-hidden border border-gray-100">
         <div className="px-6 py-4 border-b border-gray-200 bg-gray-50">
           <h3 className="text-lg font-medium text-gray-900">
             🏢 Meeting Room Efficiency
@@ -179,13 +302,26 @@ function Analytics() {
         </div>
 
         {roomStats.length === 0 && (
-          <div className="text-center py-12">
-            <div className="text-6xl mb-4">🏢</div>
-            <p className="text-gray-500">No room data available yet.</p>
-            <p className="text-sm text-gray-400 mt-2">
-              Data will appear once meetings with room locations are created.
-            </p>
-          </div>
+          <EmptyState
+            icon="🏢"
+            title="No room data available yet"
+            message="Data will appear once meetings with room locations are created."
+            actionLabel="🚀 Load Demo Data"
+            onAction={async () => {
+              try {
+                const response = await fetch('http://localhost:5000/api/demo/seed', { method: 'POST' });
+                if (response.ok) {
+                  setToast({ message: 'Demo data loaded successfully!', type: 'success' });
+                  loadData();
+                } else {
+                  setToast({ message: 'Failed to load demo data', type: 'error' });
+                }
+              } catch (err) {
+                setToast({ message: 'Error loading demo data', type: 'error' });
+                console.error(err);
+              }
+            }}
+          />
         )}
       </div>
 
