@@ -55,17 +55,120 @@ class SlackService {
       logger.warn('Slack not configured, skipping DM');
       return false;
     }
-    
+
     try {
       const result = await slackClient.chat.postMessage({
         channel: userId,
         blocks,
-        text // Fallback text
+        text
       });
-      
+
       return result.ok;
     } catch (error) {
       logger.error('Error sending Slack DM:', error);
+      return false;
+    }
+  }
+
+  async sendAgendaWarning(email, eventTitle, eventId) {
+    if (!this.isConfigured()) {
+      logger.warn('Slack not configured, skipping agenda warning');
+      return false;
+    }
+
+    try {
+      const slackUserId = await this.getSlackUserId(email);
+
+      if (!slackUserId) {
+        logger.warn(`No Slack user found for ${email}, cannot send agenda warning`);
+        return false;
+      }
+
+      const blocks = [
+        {
+          type: 'header',
+          text: {
+            type: 'plain_text',
+            text: '🚨 Meeting Police Alert!',
+            emoji: true
+          }
+        },
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `You created *${eventTitle}* without an agenda!\n\n❌ No agenda = Chaos\n✅ Add agenda = +10 Points`
+          }
+        },
+        {
+          type: 'input',
+          block_id: `agenda_input_${eventId}`,
+          element: {
+            type: 'plain_text_input',
+            action_id: 'agenda_text',
+            multiline: true,
+            placeholder: {
+              type: 'plain_text',
+              text: 'Type your meeting agenda here...'
+            }
+          },
+          label: {
+            type: 'plain_text',
+            text: '📝 Meeting Agenda'
+          },
+          dispatch_action: false
+        },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: '✅ Fix Meeting Now',
+                emoji: true
+              },
+              style: 'primary',
+              action_id: 'fix_agenda',
+              value: eventId
+            },
+            {
+              type: 'button',
+              text: {
+                type: 'plain_text',
+                text: '⏭️ Skip (Lose Points)',
+                emoji: true
+              },
+              style: 'danger',
+              action_id: 'skip_agenda',
+              value: eventId
+            }
+          ]
+        },
+        {
+          type: 'context',
+          elements: [
+            {
+              type: 'mrkdwn',
+              text: '💡 _Good agendas include: Purpose, Expected Outcomes, and Key Discussion Points_'
+            }
+          ]
+        }
+      ];
+
+      const sent = await this.sendDM(
+        slackUserId,
+        blocks,
+        `Meeting Police: You created "${eventTitle}" without an agenda!`
+      );
+
+      if (sent) {
+        logger.info(`✅ Agenda warning sent to ${email} for event ${eventId}`);
+      }
+
+      return sent;
+    } catch (error) {
+      logger.error(`Error sending agenda warning to ${email}:`, error);
       return false;
     }
   }
