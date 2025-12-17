@@ -14,6 +14,8 @@
 .env.test
 .env*.local
 
+radiant-mercury-481409-t5-8cd86c69a400.json
+
 # Google OAuth credentials and tokens
 backend/.google-credentials.json
 backend/.google-token.json

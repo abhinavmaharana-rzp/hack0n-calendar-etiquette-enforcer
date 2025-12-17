@@ -19,6 +19,7 @@ slackApp.action('rsvp_tentative', actionsHandler.handleRSVPTentative);
 // Register slash commands
 slackApp.command('/calendar-stats', commandsHandler.handleStatsCommand);
 slackApp.command('/calendar-help', commandsHandler.handleHelpCommand);
+slackApp.command('/calendar-meeting-prep', commandsHandler.handleMeetingPrepCommand)
 
 // Start Slack app
 (async () => {
