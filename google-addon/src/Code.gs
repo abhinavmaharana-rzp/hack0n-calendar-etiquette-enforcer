@@ -1,149 +1,196 @@
 /**
- * ===================================================================
- * CALENDAR ETIQUETTE ENFORCER - GOOGLE WORKSPACE ADD-ON
- * ===================================================================
- * 
- * This add-on enforces agenda requirements on all calendar events.
- * It integrates with the backend API to store meeting data and
- * track agenda compliance.
- * 
- * Author: Abhinav (Razorpay)
- * Version: 1.0.0
- * ===================================================================
+ * ========================================
+ * CHRONOKEEPER - CALENDAR ETIQUETTE ENFORCER
+ * ========================================
+ * Enhanced version with meeting creation validation
+ * - Blocks meetings without agenda (if attendees exist)
+ * - Auto-allows solo meetings with "SELF (reminder)"
+ * ========================================
  */
 
-// ===================================================================
+// ============================================
 // CONFIGURATION
-// ===================================================================
-
+// ============================================
 var CONFIG = {
-  // Backend API URL (UPDATE THIS AFTER DEPLOYING BACKEND)
-  BACKEND_API: 'http://localhost:5000', // Change to production URL
-  
-  // Minimum agenda length required
+  BACKEND_API: 'https://hack0n-calendar-etiquette-enforcer-production.up.railway.app',
   MIN_AGENDA_LENGTH: 50,
-  
-  // Agenda template
-  AGENDA_TEMPLATE: `📍 Purpose:
-
-🎯 Expected Outcomes:
-
-⚡ Decisions Needed:
-
-📌 Pre-reads (optional):`,
-  
-  // Colors
-  COLORS: {
-    primary: '#4285f4',
-    success: '#34a853',
-    warning: '#fbbc04',
-    danger: '#ea4335'
-  }
+  SELF_REMINDER_AGENDA: '📍 Purpose: Personal reminder\n\n🎯 Expected Outcomes: Complete task\n\n⚡ Decisions Needed: None\n\n📌 Notes: SELF (reminder)',
+  AGENDA_TEMPLATE: '📍 Purpose:\n\n🎯 Expected Outcomes:\n\n⚡ Decisions Needed:\n\n📌 Pre-reads (optional):'
 };
 
-// ===================================================================
-// MAIN TRIGGER FUNCTIONS
-// ===================================================================
-
-/**
- * Triggered when user opens a calendar event
- * This is the main entry point for the add-on
- */
+// ============================================
+// MAIN TRIGGER - Called when event is opened
+// ============================================
 function onCalendarEventOpen(e) {
   try {
-    Logger.log('Event opened: ' + JSON.stringify(e));
+    Logger.log('=== ChronoKeeper: Event Opened ===');
     
     var eventId = e.calendar.id;
     var calendarId = e.calendar.calendarId;
     
-    // Check if event already has agenda in our system
-    var hasAgenda = checkIfEventHasAgenda(eventId);
+    // Get event details to check attendees
+    var eventInfo = getEventInfo(eventId, calendarId);
     
-    if (hasAgenda) {
-      return createAgendaViewCard(eventId, calendarId);
-    } else {
-      return createAgendaFormCard(eventId, calendarId);
+    Logger.log('Event has ' + (eventInfo.attendeeCount || 0) + ' attendees');
+    Logger.log('Is solo meeting: ' + eventInfo.isSoloMeeting);
+    
+    // Check if this is a solo meeting (self-reminder)
+    if (eventInfo.isSoloMeeting) {
+      Logger.log('Solo meeting detected - auto-approving with SELF agenda');
+      return buildSoloMeetingCard(eventId, calendarId);
     }
-  } catch (error) {
-    Logger.log('Error in onCalendarEventOpen: ' + error);
-    return createErrorCard(error.message);
-  }
-}
-
-/**
- * Triggered when calendar event is updated
- */
-function onCalendarEventUpdate(e) {
-  try {
-    Logger.log('Event updated: ' + JSON.stringify(e));
-    return onCalendarEventOpen(e);
-  } catch (error) {
-    Logger.log('Error in onCalendarEventUpdate: ' + error);
-    return createErrorCard(error.message);
-  }
-}
-
-// ===================================================================
-// AGENDA CHECK FUNCTIONS
-// ===================================================================
-
-/**
- * Check if event already has agenda registered in backend
- */
-function checkIfEventHasAgenda(eventId) {
-  try {
-    var url = CONFIG.BACKEND_API + '/api/events/' + eventId;
     
-    var options = {
-      method: 'get',
-      muteHttpExceptions: true,
-      headers: {
-        'Content-Type': 'application/json'
-      }
+    // Has attendees - require agenda
+    return buildAgendaCard(eventId, calendarId, eventInfo.attendeeCount);
+    
+  } catch (error) {
+    Logger.log('ERROR: ' + error.message);
+    return buildErrorCard('Failed to load: ' + error.message);
+  }
+}
+
+// ============================================
+// GET EVENT INFORMATION
+// ============================================
+function getEventInfo(eventId, calendarId) {
+  try {
+    var calendar = CalendarApp.getCalendarById(calendarId);
+    if (!calendar) {
+      return { isSoloMeeting: false, attendeeCount: 0 };
+    }
+    
+    var event = calendar.getEventById(eventId);
+    if (!event) {
+      return { isSoloMeeting: false, attendeeCount: 0 };
+    }
+    
+    var guests = event.getGuestList() || [];
+    var attendeeCount = guests.length;
+    
+    // Solo meeting: only creator, no other attendees
+    var isSoloMeeting = (attendeeCount === 0);
+    
+    Logger.log('Attendee count: ' + attendeeCount);
+    Logger.log('Is solo: ' + isSoloMeeting);
+    
+    return {
+      isSoloMeeting: isSoloMeeting,
+      attendeeCount: attendeeCount,
+      event: event
     };
     
-    var response = UrlFetchApp.fetch(url, options);
-    var responseCode = response.getResponseCode();
-    
-    if (responseCode === 200) {
-      var data = JSON.parse(response.getContentText());
-      return data.success && data.meeting && data.meeting.agenda;
-    }
-    
-    return false;
   } catch (error) {
-    Logger.log('Error checking agenda: ' + error);
-    return false;
+    Logger.log('Error getting event info: ' + error.message);
+    return { isSoloMeeting: false, attendeeCount: 0 };
   }
 }
 
-// ===================================================================
-// CARD BUILDING FUNCTIONS
-// ===================================================================
-
-/**
- * Create the main agenda form card
- */
-function createAgendaFormCard(eventId, calendarId) {
+// ============================================
+// BUILD CARD FOR SOLO MEETING (SELF-REMINDER)
+// ============================================
+function buildSoloMeetingCard(eventId, calendarId) {
   var card = CardService.newCardBuilder();
   
   // Header
   card.setHeader(
     CardService.newCardHeader()
-      .setTitle('📋 Meeting Agenda Required')
-      .setSubtitle('Help everyone prep better!')
-      .setImageUrl('https://www.gstatic.com/images/branding/product/1x/calendar_48dp.png')
+      .setTitle('📝 Personal Reminder')
+      .setSubtitle('Solo meeting detected')
   );
   
-  // Instructions section
-  var instructionSection = CardService.newCardSection()
-    .setHeader('📌 Why This Matters')
-    .addWidget(
-      CardService.newTextParagraph()
-        .setText('<b>Meetings with clear agendas are 3x more productive!</b><br><br>A good agenda helps attendees:<br>• Prepare beforehand<br>• Understand the purpose<br>• Make better decisions')
-    );
+  // Info section
+  var infoSection = CardService.newCardSection();
+  infoSection.addWidget(
+    CardService.newTextParagraph()
+      .setText('✅ This is a personal reminder (no attendees).\n\nWe\'ll auto-add a simple agenda for you.')
+  );
+  card.addSection(infoSection);
   
-  card.addSection(instructionSection);
+  // Show what will be added
+  var agendaSection = CardService.newCardSection();
+  agendaSection.addWidget(
+    CardService.newTextParagraph()
+      .setText('<b>Auto-Agenda:</b>\n<font color="#666">' + CONFIG.SELF_REMINDER_AGENDA + '</font>')
+  );
+  card.addSection(agendaSection);
+  
+  // Auto-approve button
+  var buttonSection = CardService.newCardSection();
+  
+  var approveAction = CardService.newAction()
+    .setFunctionName('approveSoloMeeting')
+    .setParameters({
+      eid: eventId,
+      cid: calendarId
+    });
+  
+  buttonSection.addWidget(
+    CardService.newButtonSet()
+      .addButton(
+        CardService.newTextButton()
+          .setText('✅ Approve & Create Reminder')
+          .setOnClickAction(approveAction)
+          .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+      )
+  );
+  
+  card.addSection(buttonSection);
+  
+  // Or add custom agenda
+  var customSection = CardService.newCardSection();
+  customSection.addWidget(
+    CardService.newTextParagraph()
+      .setText('<i>Or add your own notes:</i>')
+  );
+  
+  customSection.addWidget(
+    CardService.newTextInput()
+      .setFieldName('custom_notes')
+      .setTitle('Custom Notes (Optional)')
+      .setMultiline(true)
+  );
+  
+  var customAction = CardService.newAction()
+    .setFunctionName('saveSoloMeetingWithNotes')
+    .setParameters({
+      eid: eventId,
+      cid: calendarId
+    });
+  
+  customSection.addWidget(
+    CardService.newButtonSet()
+      .addButton(
+        CardService.newTextButton()
+          .setText('Save with Custom Notes')
+          .setOnClickAction(customAction)
+      )
+  );
+  
+  card.addSection(customSection);
+  
+  return card.build();
+}
+
+// ============================================
+// BUILD CARD FOR MEETINGS WITH ATTENDEES
+// ============================================
+function buildAgendaCard(eventId, calendarId, attendeeCount) {
+  var card = CardService.newCardBuilder();
+  
+  // Header with attendee count
+  card.setHeader(
+    CardService.newCardHeader()
+      .setTitle('📋 Meeting Agenda REQUIRED')
+      .setSubtitle(attendeeCount + ' attendee' + (attendeeCount !== 1 ? 's' : '') + ' - agenda mandatory')
+  );
+  
+  // Warning section
+  var warningSection = CardService.newCardSection();
+  warningSection.addWidget(
+    CardService.newTextParagraph()
+      .setText('⚠️ <b>AGENDA REQUIRED</b>\n\nMeetings with attendees MUST have a clear agenda. Your meeting will be blocked without one.')
+  );
+  card.addSection(warningSection);
   
   // Divider
   card.addSection(
@@ -151,52 +198,428 @@ function createAgendaFormCard(eventId, calendarId) {
       .addWidget(CardService.newDivider())
   );
   
-  // Agenda input section
-  var agendaSection = CardService.newCardSection()
-    .setHeader('✍️ Meeting Agenda');
+  // Form section
+  var formSection = CardService.newCardSection();
   
-  // Agenda text area (main input)
-  agendaSection.addWidget(
+  // Agenda input (REQUIRED)
+  formSection.addWidget(
     CardService.newTextInput()
       .setFieldName('agenda')
-      .setTitle('Agenda *')
+      .setTitle('📝 Meeting Agenda *')
       .setValue(CONFIG.AGENDA_TEMPLATE)
       .setMultiline(true)
-      .setHint('Required: Minimum ' + CONFIG.MIN_AGENDA_LENGTH + ' characters')
+      .setHint('REQUIRED: Minimum 50 characters of meaningful content')
   );
   
-  // Mandatory attendees input
-  agendaSection.addWidget(
+  // Mandatory attendees
+  formSection.addWidget(
     CardService.newTextInput()
-      .setFieldName('mandatory_attendees')
+      .setFieldName('mandatory')
       .setTitle('⚠️ Mandatory Attendees (Optional)')
-      .setHint('Comma-separated emails (e.g., ceo@razorpay.com, cto@razorpay.com)')
-      .setMultiline(false)
+      .setHint('email1@razorpay.com, email2@razorpay.com')
   );
   
-  // Info text about mandatory attendees
-  agendaSection.addWidget(
+  formSection.addWidget(
     CardService.newTextParagraph()
-      .setText('<font color="#666666"><i>Meeting will auto-cancel if mandatory attendees decline</i></font>')
+      .setText('<font color="#666"><i>Meeting auto-cancels if mandatory attendees decline</i></font>')
   );
   
-  card.addSection(agendaSection);
+  card.addSection(formSection);
   
-  // Save button section
+  // Button section
   var buttonSection = CardService.newCardSection();
   
   var saveAction = CardService.newAction()
-    .setFunctionName('saveAgenda')
+    .setFunctionName('handleSaveWithValidation')
     .setParameters({
-      eventId: eventId,
-      calendarId: calendarId
+      eid: eventId,
+      cid: calendarId,
+      attendees: attendeeCount.toString()
     });
   
   buttonSection.addWidget(
     CardService.newButtonSet()
       .addButton(
         CardService.newTextButton()
-          .setText('💾 Save Agenda & Enable Invite')
+          .setText('💾 Save Agenda & Enable Meeting')
+          .setOnClickAction(saveAction)
+          .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+      )
+  );
+  
+  card.addSection(buttonSection);
+  
+  // Footer warning
+  var footerSection = CardService.newCardSection();
+  footerSection.addWidget(
+    CardService.newTextParagraph()
+      .setText('<font color="#ea4335"><b>⛔ Without an agenda, this meeting cannot be sent!</b></font>')
+  );
+  card.addSection(footerSection);
+  
+  return card.build();
+}
+
+// ============================================
+// APPROVE SOLO MEETING (AUTO-AGENDA)
+// ============================================
+function approveSoloMeeting(e) {
+  try {
+    Logger.log('=== Approving Solo Meeting ===');
+    
+    var eventId = e.parameters.eid;
+    var calendarId = e.parameters.cid;
+    
+    // Update event with auto-agenda
+    var success = updateEventDescription(
+      eventId, 
+      calendarId, 
+      CONFIG.SELF_REMINDER_AGENDA
+    );
+    
+    if (!success) {
+      return showError('Failed to update calendar event');
+    }
+    
+    // Send to backend with special flag
+    sendToBackend(eventId, CONFIG.SELF_REMINDER_AGENDA, '', true);
+    
+    Logger.log('=== Solo Meeting Approved ===');
+    return showSuccess('✅ Personal reminder created! No agenda needed for solo meetings.');
+    
+  } catch (error) {
+    Logger.log('ERROR approving solo meeting: ' + error.message);
+    return showError('Error: ' + error.message);
+  }
+}
+
+// ============================================
+// SAVE SOLO MEETING WITH CUSTOM NOTES
+// ============================================
+function saveSoloMeetingWithNotes(e) {
+  try {
+    Logger.log('=== Saving Solo Meeting with Notes ===');
+    
+    var customNotes = e.formInput.custom_notes || '';
+    var eventId = e.parameters.eid;
+    var calendarId = e.parameters.cid;
+    
+    // Build agenda with custom notes
+    var agenda = CONFIG.SELF_REMINDER_AGENDA;
+    if (customNotes.trim()) {
+      agenda = '📍 Purpose: Personal reminder\n\n' +
+               '📝 Notes:\n' + customNotes + '\n\n' +
+               '⚡ Type: SELF (reminder)';
+    }
+    
+    // Update event
+    var success = updateEventDescription(eventId, calendarId, agenda);
+    
+    if (!success) {
+      return showError('Failed to update calendar event');
+    }
+    
+    // Send to backend
+    sendToBackend(eventId, agenda, '', true);
+    
+    Logger.log('=== Solo Meeting Saved with Custom Notes ===');
+    return showSuccess('✅ Personal reminder created with your notes!');
+    
+  } catch (error) {
+    Logger.log('ERROR: ' + error.message);
+    return showError('Error: ' + error.message);
+  }
+}
+
+// ============================================
+// SAVE HANDLER WITH STRICT VALIDATION
+// ============================================
+function handleSaveWithValidation(e) {
+  try {
+    Logger.log('=== Save Handler with Validation ===');
+    
+    var agenda = e.formInput.agenda || '';
+    var mandatory = e.formInput.mandatory || '';
+    var eventId = e.parameters.eid;
+    var calendarId = e.parameters.cid;
+    var attendeeCount = parseInt(e.parameters.attendees || '0');
+    
+    Logger.log('Agenda length: ' + agenda.length);
+    Logger.log('Attendee count: ' + attendeeCount);
+    
+    // STRICT VALIDATION: If has attendees, MUST have agenda
+    if (attendeeCount > 0) {
+      
+      // Check if agenda is just the template (not filled)
+      var cleanAgenda = agenda
+        .replace(CONFIG.AGENDA_TEMPLATE, '')
+        .replace(/📍 Purpose:\s*/g, '')
+        .replace(/🎯 Expected Outcomes:\s*/g, '')
+        .replace(/⚡ Decisions Needed:\s*/g, '')
+        .replace(/📌 Pre-reads.*:\s*/g, '')
+        .replace(/\n/g, '')
+        .trim();
+      
+      Logger.log('Clean agenda length: ' + cleanAgenda.length);
+      
+      // BLOCK if agenda is empty or too short
+      if (cleanAgenda.length < CONFIG.MIN_AGENDA_LENGTH) {
+        Logger.log('⛔ BLOCKED: Insufficient agenda for meeting with attendees');
+        return showBlockedMeeting(attendeeCount);
+      }
+    }
+    
+    // Validation passed - save agenda
+    var success = updateEventDescription(eventId, calendarId, agenda);
+    
+    if (!success) {
+      Logger.log('WARNING: Could not update calendar event');
+    }
+    
+    // Send to backend
+    sendToBackend(eventId, agenda, mandatory, false);
+    
+    Logger.log('=== Save Successful ===');
+    return showSuccess('✅ Agenda saved! Meeting approved.');
+    
+  } catch (error) {
+    Logger.log('SAVE ERROR: ' + error.message);
+    return showError('Error: ' + error.message);
+  }
+}
+
+// ============================================
+// SHOW BLOCKED MEETING MESSAGE
+// ============================================
+function showBlockedMeeting(attendeeCount) {
+  var card = CardService.newCardBuilder();
+  
+  // Blocked header
+  card.setHeader(
+    CardService.newCardHeader()
+      .setTitle('⛔ Meeting Blocked')
+      .setSubtitle('Agenda required for meetings with attendees')
+  );
+  
+  // Explanation
+  var section1 = CardService.newCardSection();
+  section1.addWidget(
+    CardService.newTextParagraph()
+      .setText('<font color="#ea4335"><b>This meeting cannot be created!</b></font>\n\n' +
+               'You have <b>' + attendeeCount + ' attendee' + (attendeeCount !== 1 ? 's' : '') + '</b> invited.\n\n' +
+               'ChronoKeeper requires a meaningful agenda for all meetings with attendees.')
+  );
+  card.addSection(section1);
+  
+  // What to do
+  var section2 = CardService.newCardSection();
+  section2.addWidget(
+    CardService.newTextParagraph()
+      .setText('<b>What you need to do:</b>\n' +
+               '1. Fill in the Purpose\n' +
+               '2. Define Expected Outcomes\n' +
+               '3. List Decisions Needed\n' +
+               '4. Click Save (minimum 50 characters)')
+  );
+  card.addSection(section2);
+  
+  // Alternative
+  var section3 = CardService.newCardSection();
+  section3.addWidget(
+    CardService.newTextParagraph()
+      .setText('<font color="#666"><i>💡 Tip: If this is a personal reminder, remove all attendees and it will be auto-approved.</i></font>')
+  );
+  card.addSection(section3);
+  
+  card.addSection(
+    CardService.newCardSection()
+      .addWidget(CardService.newDivider())
+  );
+  
+  // Show the form again
+  var formSection = CardService.newCardSection();
+  formSection.addWidget(
+    CardService.newTextInput()
+      .setFieldName('agenda')
+      .setTitle('Add Agenda Now')
+      .setValue(CONFIG.AGENDA_TEMPLATE)
+      .setMultiline(true)
+  );
+  
+  card.addSection(formSection);
+  
+  return CardService.newActionResponseBuilder()
+    .setNavigation(
+      CardService.newNavigation()
+        .updateCard(card.build())
+    )
+    .setNotification(
+      CardService.newNotification()
+        .setText('⛔ Meeting BLOCKED! Add agenda to proceed.')
+        .setType(CardService.NotificationType.ERROR)
+    )
+    .build();
+}
+
+// ============================================
+// BUILD CARD FOR SOLO MEETING
+// ============================================
+function buildSoloMeetingCard(eventId, calendarId) {
+  var card = CardService.newCardBuilder();
+  
+  // Header
+  card.setHeader(
+    CardService.newCardHeader()
+      .setTitle('📝 Personal Reminder Detected')
+      .setSubtitle('No attendees - auto-approved!')
+  );
+  
+  // Info section
+  var infoSection = CardService.newCardSection();
+  infoSection.addWidget(
+    CardService.newTextParagraph()
+      .setText('✅ <b>Solo meeting detected!</b>\n\n' +
+               'Since this is a personal reminder (no attendees), we\'ll automatically add a simple agenda for you.')
+  );
+  card.addSection(infoSection);
+  
+  // Show auto-agenda
+  var agendaSection = CardService.newCardSection();
+  agendaSection.addWidget(
+    CardService.newDecoratedText()
+      .setText('<b>Auto-Agenda:</b>')
+      .setBottomLabel('SELF (reminder) - No detailed agenda needed')
+  );
+  card.addSection(agendaSection);
+  
+  // Auto-approve button
+  var buttonSection = CardService.newCardSection();
+  
+  var approveAction = CardService.newAction()
+    .setFunctionName('approveSoloMeeting')
+    .setParameters({
+      eid: eventId,
+      cid: calendarId
+    });
+  
+  buttonSection.addWidget(
+    CardService.newButtonSet()
+      .addButton(
+        CardService.newTextButton()
+          .setText('✅ Create Reminder')
+          .setOnClickAction(approveAction)
+          .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
+      )
+  );
+  
+  card.addSection(buttonSection);
+  
+  // Optional: Add custom notes
+  card.addSection(
+    CardService.newCardSection()
+      .addWidget(CardService.newDivider())
+  );
+  
+  var customSection = CardService.newCardSection();
+  customSection.addWidget(
+    CardService.newTextParagraph()
+      .setText('<i>Want to add notes?</i>')
+  );
+  
+  customSection.addWidget(
+    CardService.newTextInput()
+      .setFieldName('custom_notes')
+      .setTitle('Notes (Optional)')
+      .setMultiline(true)
+      .setHint('Add any notes for your reminder')
+  );
+  
+  var customAction = CardService.newAction()
+    .setFunctionName('saveSoloMeetingWithNotes')
+    .setParameters({
+      eid: eventId,
+      cid: calendarId
+    });
+  
+  customSection.addWidget(
+    CardService.newButtonSet()
+      .addButton(
+        CardService.newTextButton()
+          .setText('Save with Notes')
+          .setOnClickAction(customAction)
+      )
+  );
+  
+  card.addSection(customSection);
+  
+  return card.build();
+}
+
+// ============================================
+// BUILD AGENDA CARD FOR REGULAR MEETINGS
+// ============================================
+function buildAgendaCard(eventId, calendarId, attendeeCount) {
+  var card = CardService.newCardBuilder();
+  
+  // Header
+  card.setHeader(
+    CardService.newCardHeader()
+      .setTitle('📋 Meeting Agenda REQUIRED')
+      .setSubtitle(attendeeCount + ' attendee' + (attendeeCount !== 1 ? 's' : '') + ' invited')
+  );
+  
+  // Warning
+  var warningSection = CardService.newCardSection();
+  warningSection.addWidget(
+    CardService.newTextParagraph()
+      .setText('<font color="#ea4335"><b>⛔ AGENDA REQUIRED</b></font>\n\n' +
+               'Meetings with attendees CANNOT be created without a clear agenda.\n\n' +
+               'Meetings with good agendas are 3x more productive!')
+  );
+  card.addSection(warningSection);
+  
+  card.addSection(
+    CardService.newCardSection()
+      .addWidget(CardService.newDivider())
+  );
+  
+  // Form
+  var formSection = CardService.newCardSection();
+  
+  formSection.addWidget(
+    CardService.newTextInput()
+      .setFieldName('agenda')
+      .setTitle('📝 Meeting Agenda *')
+      .setValue(CONFIG.AGENDA_TEMPLATE)
+      .setMultiline(true)
+      .setHint('REQUIRED: Min 50 chars of real content')
+  );
+  
+  formSection.addWidget(
+    CardService.newTextInput()
+      .setFieldName('mandatory')
+      .setTitle('⚠️ Mandatory Attendees (Optional)')
+      .setHint('Comma-separated emails')
+  );
+  
+  card.addSection(formSection);
+  
+  // Save button
+  var buttonSection = CardService.newCardSection();
+  
+  var saveAction = CardService.newAction()
+    .setFunctionName('handleSaveWithValidation')
+    .setParameters({
+      eid: eventId,
+      cid: calendarId,
+      attendees: attendeeCount.toString()
+    });
+  
+  buttonSection.addWidget(
+    CardService.newButtonSet()
+      .addButton(
+        CardService.newTextButton()
+          .setText('💾 Save Agenda & Enable Meeting')
           .setOnClickAction(saveAction)
           .setTextButtonStyle(CardService.TextButtonStyle.FILLED)
       )
@@ -205,165 +628,71 @@ function createAgendaFormCard(eventId, calendarId) {
   card.addSection(buttonSection);
   
   // Footer
-  var footerSection = CardService.newCardSection()
-    .addWidget(
-      CardService.newTextParagraph()
-        .setText('<font color="#999999"><i>Powered by Calendar Etiquette Enforcer 🚀<br>Built for Razorpay</i></font>')
-    );
-  
+  var footerSection = CardService.newCardSection();
+  footerSection.addWidget(
+    CardService.newTextParagraph()
+      .setText('<font color="#999"><i>🚀 Powered by ChronoKeeper</i></font>')
+  );
   card.addSection(footerSection);
   
   return card.build();
 }
 
-/**
- * Create view card for existing agenda
- */
-function createAgendaViewCard(eventId, calendarId) {
-  var card = CardService.newCardBuilder();
-  
-  card.setHeader(
-    CardService.newCardHeader()
-      .setTitle('✅ Agenda Saved Successfully')
-      .setSubtitle('This meeting is all set!')
-      .setImageUrl('https://www.gstatic.com/images/branding/product/1x/calendar_48dp.png')
-  );
-  
-  // Success message
-  var successSection = CardService.newCardSection()
-    .addWidget(
-      CardService.newTextParagraph()
-        .setText('✨ Great job! This meeting has a clear agenda.<br><br>Attendees will receive:<br>• RSVP reminders on Slack<br>• Agenda in calendar invite<br>• Better preparation time')
-    );
-  
-  card.addSection(successSection);
-  
-  // Divider
-  card.addSection(
-    CardService.newCardSection()
-      .addWidget(CardService.newDivider())
-  );
-  
-  // Action buttons
-  var buttonSection = CardService.newCardSection();
-  
-  // Update agenda button
-  var updateAction = CardService.newAction()
-    .setFunctionName('showUpdateForm')
-    .setParameters({ 
-      eventId: eventId, 
-      calendarId: calendarId 
-    });
-  
-  buttonSection.addWidget(
-    CardService.newButtonSet()
-      .addButton(
-        CardService.newTextButton()
-          .setText('🔄 Update Agenda')
-          .setOnClickAction(updateAction)
-          .setTextButtonStyle(CardService.TextButtonStyle.TEXT)
-      )
-  );
-  
-  card.addSection(buttonSection);
-  
-  // Stats
-  var statsSection = CardService.newCardSection()
-    .addWidget(
-      CardService.newTextParagraph()
-        .setText('<font color="#34a853"><b>📊 Impact:</b></font><br>Meetings with agendas save an average of <b>15 minutes</b> per meeting!')
-    );
-  
-  card.addSection(statsSection);
-  
-  return card.build();
-}
-
-/**
- * Create error card
- */
-function createErrorCard(errorMessage) {
-  var card = CardService.newCardBuilder();
-  
-  card.setHeader(
-    CardService.newCardHeader()
-      .setTitle('❌ Error')
-      .setSubtitle('Something went wrong')
-  );
-  
-  var errorSection = CardService.newCardSection()
-    .addWidget(
-      CardService.newTextParagraph()
-        .setText('<font color="#ea4335"><b>Error:</b> ' + errorMessage + '</font><br><br>Please try again or contact support.')
-    );
-  
-  card.addSection(errorSection);
-  
-  return card.build();
-}
-
-// ===================================================================
-// ACTION HANDLERS
-// ===================================================================
-
-/**
- * Save agenda to backend
- */
-function saveAgenda(e) {
+// ============================================
+// UPDATE CALENDAR EVENT DESCRIPTION
+// ============================================
+function updateEventDescription(eventId, calendarId, agenda) {
   try {
-    var formInput = e.formInput;
-    var agenda = formInput.agenda;
-    var mandatoryAttendees = formInput.mandatory_attendees || '';
-    var eventId = e.parameters.eventId;
-    var calendarId = e.parameters.calendarId;
-    
-    // Validate agenda
-    var cleanAgenda = agenda.replace(CONFIG.AGENDA_TEMPLATE, '').trim();
-    
-    if (!agenda || cleanAgenda.length < CONFIG.MIN_AGENDA_LENGTH) {
-      return CardService.newActionResponseBuilder()
-        .setNotification(
-          CardService.newNotification()
-            .setText('❌ Agenda too short! Please add meaningful content (min ' + CONFIG.MIN_AGENDA_LENGTH + ' chars)')
-            .setType(CardService.NotificationType.ERROR)
-        )
-        .build();
-    }
-    
-    // Get current user
-    var userEmail = Session.getActiveUser().getEmail();
-    
-    // Get event details
     var calendar = CalendarApp.getCalendarById(calendarId);
     if (!calendar) {
-      throw new Error('Calendar not found');
+      Logger.log('Calendar not found: ' + calendarId);
+      return false;
     }
     
     var event = calendar.getEventById(eventId);
     if (!event) {
-      throw new Error('Event not found');
+      Logger.log('Event not found: ' + eventId);
+      return false;
     }
     
-    // Parse mandatory attendees
+    var header = '━━━━━━━━━━━━━━━━━━━━━━\n📋 MEETING AGENDA\n━━━━━━━━━━━━━━━━━━━━━━\n\n';
+    var footer = '\n\n━━━━━━━━━━━━━━━━━━━━━━\n✅ Agenda verified by ChronoKeeper\n';
+    var oldDesc = event.getDescription() || '';
+    
+    event.setDescription(header + agenda + footer + oldDesc);
+    
+    Logger.log('✅ Event description updated');
+    return true;
+    
+  } catch (error) {
+    Logger.log('Update error: ' + error.message);
+    return false;
+  }
+}
+
+// ============================================
+// SEND TO BACKEND API
+// ============================================
+function sendToBackend(eventId, agenda, mandatory, isSoloMeeting) {
+  try {
+    var userEmail = Session.getActiveUser().getEmail();
+    
     var mandatoryList = [];
-    if (mandatoryAttendees && mandatoryAttendees.trim()) {
-      mandatoryList = mandatoryAttendees
+    if (mandatory && mandatory.trim()) {
+      mandatoryList = mandatory
         .split(',')
-        .map(function(email) { return email.trim(); })
-        .filter(function(email) { 
-          return email.length > 0 && email.indexOf('@') > -1; 
-        });
+        .map(function(e) { return e.trim(); })
+        .filter(function(e) { return e.length > 0 && e.indexOf('@') > -1; });
     }
     
-    // Prepare payload for backend
     var payload = {
       eventId: eventId,
       agenda: agenda,
       mandatoryAttendees: mandatoryList,
-      creator: userEmail
+      creator: userEmail,
+      isSoloMeeting: isSoloMeeting || false
     };
     
-    // Send to backend API
     var options = {
       method: 'post',
       contentType: 'application/json',
@@ -371,335 +700,131 @@ function saveAgenda(e) {
       muteHttpExceptions: true
     };
     
+    Logger.log('Calling backend: ' + CONFIG.BACKEND_API);
+    
     var response = UrlFetchApp.fetch(
       CONFIG.BACKEND_API + '/api/events/register',
       options
     );
     
-    var responseCode = response.getResponseCode();
-    var responseData = JSON.parse(response.getContentText());
+    var code = response.getResponseCode();
+    Logger.log('Backend response: ' + code);
     
-    if (responseCode !== 200) {
-      throw new Error(responseData.error || 'Failed to save agenda');
+    if (code === 200) {
+      Logger.log('✅ Backend registration successful');
+      var data = JSON.parse(response.getContentText());
+      Logger.log('Meeting ID: ' + (data.meeting ? data.meeting.id : 'N/A'));
+    } else {
+      Logger.log('⚠️ Backend error: ' + response.getContentText());
     }
     
-    // Update event description with agenda
-    var existingDescription = event.getDescription() || '';
-    var agendaHeader = '━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n📋 MEETING AGENDA\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n';
-    var agendaFooter = '\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n' + existingDescription;
-    var updatedDescription = agendaHeader + agenda + agendaFooter;
-    
-    event.setDescription(updatedDescription);
-    
-    // Success response
-    return CardService.newActionResponseBuilder()
-      .setNotification(
-        CardService.newNotification()
-          .setText('✅ Agenda saved! Your invite is ready to send.')
-          .setType(CardService.NotificationType.INFO)
-      )
-      .setStateChanged(true)
-      .build();
-    
   } catch (error) {
-    Logger.log('Error saving agenda: ' + error);
-    return CardService.newActionResponseBuilder()
-      .setNotification(
-        CardService.newNotification()
-          .setText('❌ Error: ' + error.message)
-          .setType(CardService.NotificationType.ERROR)
-      )
-      .build();
+    Logger.log('Backend API error: ' + error.message);
+    // Don't fail - agenda is still saved to calendar
   }
 }
 
-/**
- * Show update form for existing agenda
- */
-function showUpdateForm(e) {
-  var eventId = e.parameters.eventId;
-  var calendarId = e.parameters.calendarId;
+// ============================================
+// RESPONSE BUILDERS
+// ============================================
+function showSuccess(message) {
+  message = message || '✅ Agenda saved! Your meeting is approved.';
   
-  return createAgendaFormCard(eventId, calendarId);
-}
-
-// ===================================================================
-// UTILITY FUNCTIONS
-// ===================================================================
-
-/**
- * Get calendar event by ID
- */
-function getEventById(calendarId, eventId) {
-  try {
-    var calendar = CalendarApp.getCalendarById(calendarId);
-    if (!calendar) return null;
-    
-    return calendar.getEventById(eventId);
-  } catch (error) {
-    Logger.log('Error getting event: ' + error);
-    return null;
-  }
-}
-
-/**
- * Validate email format
- */
-function isValidEmail(email) {
-  var emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email);
-}
-
-// ===================================================================
-// TESTING & DEBUG FUNCTIONS
-// ===================================================================
-
-/**
- * Test function for debugging
- */
-function testAddon() {
-  var testEvent = {
-    calendar: {
-      id: 'test_event_id',
-      calendarId: Session.getActiveUser().getEmail()
-    }
-  };
-  
-  var card = onCalendarEventOpen(testEvent);
-  Logger.log('Test card created: ' + card);
-}
-
-/**
- * Test backend connection
- */
-function testBackendConnection() {
-  try {
-    var response = UrlFetchApp.fetch(CONFIG.BACKEND_API + '/health');
-    Logger.log('Backend response: ' + response.getContentText());
-    return true;
-  } catch (error) {
-    Logger.log('Backend connection failed: ' + error);
-    return false;
-  }
-}
-
-/**
- * Get add-on logs
- */
-function getRecentLogs() {
-  var logs = Logger.getLog();
-  Logger.log('Recent logs:\n' + logs);
-  return logs;
-}
-
-// Add mobile detection
-function isMobileDevice() {
-  try {
-    var userAgent = navigator.userAgent || '';
-    return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
-  } catch (e) {
-    return false;
-  }
-}
-
-// Create mobile-friendly card
-function createMobileAgendaCard(eventId, calendarId) {
-  var card = CardService.newCardBuilder();
-  
-  card.setHeader(
-    CardService.newCardHeader()
-      .setTitle('📋 Agenda Required')
-      .setSubtitle('Quick template below 👇')
-  );
-  
-  // Simplified mobile template
-  var mobileSection = CardService.newCardSection();
-  
-  // Quick buttons for common meeting types
-  var buttonSet = CardService.newButtonSet();
-  
-  buttonSet.addButton(
-    CardService.newTextButton()
-      .setText('📊 Status Update')
-      .setOnClickAction(
-        CardService.newAction()
-          .setFunctionName('fillStatusUpdateTemplate')
-          .setParameters({ eventId: eventId })
-      )
-  );
-  
-  buttonSet.addButton(
-    CardService.newTextButton()
-      .setText('🤝 1-on-1')
-      .setOnClickAction(
-        CardService.newAction()
-          .setFunctionName('fillOneOnOneTemplate')
-          .setParameters({ eventId: eventId })
-      )
-  );
-  
-  buttonSet.addButton(
-    CardService.newTextButton()
-      .setText('🎯 Planning')
-      .setOnClickAction(
-        CardService.newAction()
-          .setFunctionName('fillPlanningTemplate')
-          .setParameters({ eventId: eventId })
-      )
-  );
-  
-  mobileSection.addWidget(buttonSet);
-  
-  // Or custom agenda
-  mobileSection.addWidget(
-    CardService.newTextInput()
-      .setFieldName('agenda')
-      .setTitle('Custom Agenda')
-      .setHint('What will we discuss?')
-      .setMultiline(true)
-  );
-  
-  card.addSection(mobileSection);
-  
-  return card.build();
-}
-
-// Quick template fillers
-function fillStatusUpdateTemplate(e) {
-  var template = `📊 Status Update Meeting
-
-📍 Purpose: Review current progress and blockers
-
-🎯 Expected Outcomes:
-- Clear understanding of team progress
-- Identified blockers and action items
-- Alignment on next sprint priorities
-
-⚡ Updates Needed From:
-- Engineering: [Sprint progress]
-- Product: [Feature priorities]
-- Design: [UI/UX status]
-
-📌 Pre-reads: [Link to status doc]`;
-
-  return saveAgendaFromTemplate(e, template);
-}
-
-function fillOneOnOneTemplate(e) {
-  var template = `🤝 One-on-One Meeting
-
-📍 Purpose: Career discussion and feedback
-
-🎯 Expected Outcomes:
-- Discuss recent wins and challenges
-- Career growth conversation
-- Set action items for next 1-1
-
-⚡ Topics to Cover:
-- Recent project feedback
-- Career goals progress
-- Any concerns or blockers
-
-📌 Notes: Confidential`;
-
-  return saveAgendaFromTemplate(e, template);
-}
-
-function saveAgendaFromTemplate(e, template) {
-  var eventId = e.parameters.eventId;
-  
-  // Auto-fill the agenda field with template
   return CardService.newActionResponseBuilder()
-    .setStateChanged(true)
     .setNotification(
       CardService.newNotification()
-        .setText('✅ Template applied! Review and save.')
+        .setText(message)
+        .setType(CardService.NotificationType.INFO)
+    )
+    .setStateChanged(true)
+    .build();
+}
+
+function showError(message) {
+  return CardService.newActionResponseBuilder()
+    .setNotification(
+      CardService.newNotification()
+        .setText('❌ ' + message)
+        .setType(CardService.NotificationType.ERROR)
     )
     .build();
 }
 
-// In Code.gs, add live validation
-function createAgendaFormWithLiveValidation(eventId, calendarId) {
+function buildErrorCard(message) {
   var card = CardService.newCardBuilder();
   
   card.setHeader(
     CardService.newCardHeader()
-      .setTitle('📋 Meeting Agenda')
-      .setSubtitle('Quality score will update as you type')
+      .setTitle('❌ Error')
   );
   
-  var formSection = CardService.newCardSection();
-  
-  // Agenda input
-  formSection.addWidget(
-    CardService.newTextInput()
-      .setFieldName('agenda')
-      .setTitle('Agenda')
-      .setValue(CONFIG.AGENDA_TEMPLATE)
-      .setMultiline(true)
-      .setOnChangeAction(
-        CardService.newAction()
-          .setFunctionName('updateAgendaScore')
-          .setParameters({ eventId: eventId })
+  card.addSection(
+    CardService.newCardSection()
+      .addWidget(
+        CardService.newTextParagraph()
+          .setText(message)
       )
   );
-  
-  // Quality indicator (updates on change)
-  formSection.addWidget(
-    CardService.newTextParagraph()
-      .setText('<font color="#666">Quality Score: <b>Calculating...</b></font>')
-  );
-  
-  card.addSection(formSection);
   
   return card.build();
 }
 
-function updateAgendaScore(e) {
-  var agenda = e.formInput.agenda;
+// ============================================
+// TEST FUNCTION
+// ============================================
+function testAddon() {
+  Logger.log('=== Testing ChronoKeeper ===');
   
-  // Call backend for validation
-  var options = {
-    method: 'post',
-    contentType: 'application/json',
-    payload: JSON.stringify({ agenda: agenda }),
-    muteHttpExceptions: true
+  var fakeEvent = {
+    calendar: {
+      id: 'test_123',
+      calendarId: Session.getActiveUser().getEmail()
+    }
   };
   
-  var response = UrlFetchApp.fetch(
-    CONFIG.BACKEND_API + '/api/events/validate-agenda',
-    options
-  );
+  var card = onCalendarEventOpen(fakeEvent);
+  Logger.log('Card built successfully');
   
-  var data = JSON.parse(response.getContentText());
+  return card;
+}
+
+// ============================================
+// TEST SOLO MEETING
+// ============================================
+function testSoloMeeting() {
+  Logger.log('=== Testing Solo Meeting Logic ===');
   
-  // Build updated card with score
-  var card = CardService.newCardBuilder();
+  // Simulate solo meeting (no attendees)
+  var eventInfo = {
+    isSoloMeeting: true,
+    attendeeCount: 0
+  };
   
-  var scoreSection = CardService.newCardSection();
+  Logger.log('Solo meeting: ' + eventInfo.isSoloMeeting);
+  Logger.log('Should auto-approve with SELF agenda');
   
-  var scoreColor = data.score >= 70 ? '#34a853' : 
-                   data.score >= 50 ? '#fbbc04' : '#ea4335';
+  var card = buildSoloMeetingCard('test_solo', Session.getActiveUser().getEmail());
+  Logger.log('Solo meeting card built successfully');
   
-  scoreSection.addWidget(
-    CardService.newTextParagraph()
-      .setText('<font color="' + scoreColor + '"><b>Quality Score: ' + 
-               data.score + '/100</b></font>')
-  );
+  return card;
+}
+
+// ============================================
+// TEST MEETING WITH ATTENDEES (SHOULD BLOCK)
+// ============================================
+function testMeetingWithAttendees() {
+  Logger.log('=== Testing Meeting with Attendees ===');
   
-  // Show feedback
-  if (data.feedback && data.feedback.length > 0) {
-    data.feedback.forEach(function(item) {
-      scoreSection.addWidget(
-        CardService.newTextParagraph()
-          .setText('<font color="#666">' + item.message + '</font>')
-      );
-    });
-  }
+  var eventInfo = {
+    isSoloMeeting: false,
+    attendeeCount: 3
+  };
   
-  card.addSection(scoreSection);
+  Logger.log('Attendee count: ' + eventInfo.attendeeCount);
+  Logger.log('Should require agenda');
   
-  return CardService.newActionResponseBuilder()
-    .setNavigation(CardService.newNavigation().updateCard(card.build()))
-    .build();
+  var card = buildAgendaCard('test_multi', Session.getActiveUser().getEmail(), 3);
+  Logger.log('Multi-attendee card built successfully');
+  
+  return card;
 }

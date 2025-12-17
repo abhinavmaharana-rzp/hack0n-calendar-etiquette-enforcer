@@ -1,25 +1,26 @@
 {
   "timeZone": "Asia/Kolkata",
-  "dependencies": {
-    "enabledAdvancedServices": []
-  },
+  "dependencies": {},
   "exceptionLogging": "STACKDRIVER",
   "runtimeVersion": "V8",
+  "urlFetchWhitelist": [
+    "https://hack0n-calendar-etiquette-enforcer-production.up.railway.app/"
+  ],
   "oauthScopes": [
-    "https://www.googleapis.com/auth/calendar.addons.execute",
+    "https://www.googleapis.com/auth/calendar",
     "https://www.googleapis.com/auth/calendar.events",
     "https://www.googleapis.com/auth/calendar.readonly",
-    "https://www.googleapis.com/auth/script.external_request"
+    "https://www.googleapis.com/auth/calendar.addons.execute",
+    "https://www.googleapis.com/auth/script.external_request",
+    "https://www.googleapis.com/auth/userinfo.email"
   ],
   "addOns": {
     "common": {
-      "name": "Calendar Etiquette Enforcer",
+      "name": "ChronoKeeper",
       "logoUrl": "https://www.gstatic.com/images/branding/product/1x/calendar_48dp.png",
       "layoutProperties": {
-        "primaryColor": "#4285f4"
-      },
-      "homepageTrigger": {
-        "enabled": false
+        "primaryColor": "#4285f4",
+        "secondaryColor": "#ea4335"
       }
     },
     "calendar": {

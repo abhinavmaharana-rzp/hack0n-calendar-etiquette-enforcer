@@ -6,13 +6,13 @@ const calendarService = require('../services/calendarService');
 const badgeService = require('../services/badgeService');
 const logger = require('../utils/logger');
 const agendaAnalyzer = require('../services/agendaAnalyser')
+const meetingValidator = require('../services/meetingValidator');
 
-// Register new meeting (called from Google Add-on)
 router.post('/register', async (req, res) => {
   try {
     const { eventId, agenda, mandatoryAttendees, creator } = req.body;
 
-    if (!eventId || !agenda || !creator) {
+    if (!eventId || !creator) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
@@ -22,44 +22,64 @@ router.post('/register', async (req, res) => {
       return res.json({ success: true, message: 'Already registered', meeting: existing });
     }
 
-    // Fetch event details from Google Calendar
-    const event = await calendarService.getEvent(eventId);
+    // Fetch event from Google
+    let event;
+    try {
+      event = await calendarService.getEvent(eventId);
+    } catch (err) {
+      logger.warn('Could not fetch from Google Calendar:', err.message);
+      event = {
+        organizer: { email: creator },
+        summary: 'Meeting',
+        attendees: [],
+        start: { dateTime: new Date().toISOString() },
+        end: { dateTime: new Date(Date.now() + 3600000).toISOString() }
+      };
+    }
 
-    // Parse agenda
-    const agendaParsed = {
-      raw: agenda,
-      purpose: extractSection(agenda, '📍 Purpose:', '🎯'),
-      outcomes: extractSection(agenda, '🎯 Expected Outcomes:', '⚡'),
-      decisions: extractSection(agenda, '⚡ Decisions Needed:', '📌'),
-      prereads: extractSection(agenda, '📌 Pre-reads')
-    };
-
-    // Calculate agenda quality score
+    // Parse and score agenda
+    const { parseAgenda, calculateAgendaScore } = require('../utils/helpers');
+    const agendaParsed = parseAgenda(agenda || '');
+    agendaParsed.raw = agenda || '';
+    
     const agendaScore = calculateAgendaScore(agendaParsed);
 
-    // Create meeting record
+    // Create meeting
     const meeting = new Meeting({
       eventId,
-      calendarId: event.organizer.email,
-      summary: event.summary,
+      calendarId: event.organizer?.email || creator,
+      summary: event.summary || 'Meeting',
       agenda: agendaParsed,
       creator,
-      creatorName: event.organizer.displayName || creator,
+      creatorName: event.organizer?.displayName || creator,
       mandatoryAttendees: mandatoryAttendees || [],
       attendees: (event.attendees || []).map(a => ({
         email: a.email,
         name: a.displayName || a.email,
         responseStatus: a.responseStatus || 'needsAction'
       })),
-      startTime: new Date(event.start.dateTime || event.start.date),
-      endTime: new Date(event.end.dateTime || event.end.date),
+      startTime: new Date(event.start?.dateTime || event.start?.date),
+      endTime: new Date(event.end?.dateTime || event.end?.date),
       location: event.location,
-      meetingLink: event.hangoutLink,
       agendaQualityScore: agendaScore,
       status: 'scheduled'
     });
 
     await meeting.save();
+
+    // ⭐ VALIDATE AND ENFORCE ⭐
+    const validation = await meetingValidator.validateAndEnforce(meeting);
+    
+    if (!validation.valid) {
+      logger.warn(`Meeting ${eventId} was auto-cancelled: ${validation.reason}`);
+      
+      return res.json({
+        success: false,
+        message: 'Meeting cancelled due to policy violation',
+        reason: validation.reason,
+        meeting: null
+      });
+    }
 
     // Update creator stats
     await UserStats.findOneAndUpdate(
@@ -67,28 +87,28 @@ router.post('/register', async (req, res) => {
       {
         $inc: {
           meetingsOrganized: 1,
-          meetingsWithAgenda: 1,
+          meetingsWithAgenda: agendaScore >= 70 ? 1 : 0,
           agendaScore: agendaScore >= 70 ? 1 : 0
         }
       },
       { upsert: true }
     );
 
-    // Evaluate badges
     await badgeService.evaluateAndAwardBadges(creator);
 
-    logger.info(`Meeting registered: ${eventId} by ${creator}`);
+    logger.info(`Meeting registered and validated: ${eventId}`);
 
     res.json({
       success: true,
-      message: 'Meeting registered successfully',
+      message: 'Meeting approved',
       meeting: {
         id: meeting._id,
         eventId: meeting.eventId,
-        summary: meeting.summary,
-        agendaScore
+        agendaScore,
+        validation
       }
     });
+    
   } catch (error) {
     logger.error('Error registering meeting:', error);
     res.status(500).json({ error: error.message });
