@@ -166,5 +166,5 @@ This project is **production-ready** and **demo-ready**. All features are implem
 
 ---
 
-**Built with ❤️ for Razorpay Hack0n-05**
+**Built with ❤️ for Razorpay**
 

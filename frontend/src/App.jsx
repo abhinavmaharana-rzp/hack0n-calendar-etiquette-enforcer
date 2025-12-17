@@ -372,7 +372,7 @@ function AppContent() {
             <div className="mt-8 pt-8 border-t border-gray-200">
               <div className="flex flex-col md:flex-row justify-between items-center">
                 <p className="text-sm text-gray-500 text-center md:text-left">
-                  Built with ❤️ for <span className="font-semibold text-primary">Razorpay Hack0n-05</span>
+                  Built with ❤️ for <span className="font-semibold text-primary">Razorpay</span>
                 </p>
                 <div className="mt-4 md:mt-0 flex space-x-6">
                   <a href="https://github.com" className="text-gray-400 hover:text-gray-500 transition-colors">

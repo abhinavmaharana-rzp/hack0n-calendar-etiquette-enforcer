@@ -7,7 +7,7 @@
  * It integrates with the backend API to store meeting data and
  * track agenda compliance.
  * 
- * Author: Abhinav (Razorpay Hack0n-05)
+ * Author: Abhinav (Razorpay)
  * Version: 1.0.0
  * ===================================================================
  */
@@ -208,7 +208,7 @@ function createAgendaFormCard(eventId, calendarId) {
   var footerSection = CardService.newCardSection()
     .addWidget(
       CardService.newTextParagraph()
-        .setText('<font color="#999999"><i>Powered by Calendar Etiquette Enforcer 🚀<br>Built for Razorpay Hack0n-05</i></font>')
+        .setText('<font color="#999999"><i>Powered by Calendar Etiquette Enforcer 🚀<br>Built for Razorpay</i></font>')
     );
   
   card.addSection(footerSection);

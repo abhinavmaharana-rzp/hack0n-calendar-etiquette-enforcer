@@ -57,7 +57,7 @@ function Landing() {
             {/* Badge */}
             <div className="inline-flex items-center px-4 py-2 bg-blue-100 rounded-full mb-8 animate-fade-in">
               <span className="text-sm font-semibold text-blue-700">
-                🚀 Built for Razorpay Hack0n-05
+                🚀 Built for Razorpay
               </span>
             </div>
 
@@ -308,7 +308,7 @@ function Landing() {
           </div>
           <div className="border-t border-gray-800 pt-8 text-center text-sm text-gray-400">
             <p>
-              Built with ❤️ for <span className="font-semibold text-white">Razorpay Hack0n-05</span>
+              Built with ❤️ for <span className="font-semibold text-white">Razorpay</span>
             </p>
           </div>
         </div>

@@ -2,7 +2,7 @@
 
 Improving meeting hygiene at Razorpay through intelligent automation, gamification, and a whole lot of humor!
 
-Built for Razorpay Hack0n-05 | A complete solution to enforce agenda requirements, automate RSVP reminders, and track calendar etiquette across the organization.
+Built for Razorpay | A complete solution to enforce agenda requirements, automate RSVP reminders, and track calendar etiquette across the organization.
 
 📋 Table of Contents
 
@@ -1271,9 +1271,9 @@ The open-source community for amazing tools
 
 📞 Contact & Support
 Built by: Abhinav
-Email: [your-email@razorpay.com]
+Email: [abhinav.maharana@razorpay.com]
 Slack: @abhinav
-Hackathon: Razorpay Hack0n-05
+Hackathon: Razorpay
 For questions, issues, or suggestions, please:
 
 Open an issue on GitHub

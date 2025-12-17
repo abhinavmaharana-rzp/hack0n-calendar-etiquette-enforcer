@@ -142,7 +142,7 @@ function Settings() {
         <h3 className="text-lg font-semibold text-gray-900 mb-4">About</h3>
         <div className="space-y-2 text-sm text-gray-700">
           <p><strong>Version:</strong> 1.0.0</p>
-          <p><strong>Built for:</strong> Razorpay Hack0n-05</p>
+          <p><strong>Built for:</strong> Razorpay</p>
           <p><strong>Purpose:</strong> Improving meeting hygiene through automation and gamification</p>
         </div>
       </div>
