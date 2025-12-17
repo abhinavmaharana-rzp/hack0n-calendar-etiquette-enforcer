@@ -80,90 +80,78 @@ function AppContent() {
               
               {/* Navigation Links */}
               <div className="hidden sm:ml-8 sm:flex sm:space-x-4 lg:space-x-8 flex-nowrap items-center">
-                <Tooltip text="Dashboard overview (Alt+1)">
-                  <NavLink
-                    to="/dashboard"
-                    className={({ isActive }) =>
-                      `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${
-                        isActive
-                          ? 'border-primary text-gray-900'
-                          : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                      }`
-                    }
-                  >
-                    Dashboard
-                  </NavLink>
-                </Tooltip>
-                <Tooltip text="Leaderboard & rankings (Alt+2)">
-                  <NavLink
-                    to="/leaderboard"
-                    className={({ isActive }) =>
-                      `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${
-                        isActive
-                          ? 'border-primary text-gray-900'
-                          : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                      }`
-                    }
-                  >
-                    Leaderboard
-                  </NavLink>
-                </Tooltip>
-                <Tooltip text="Analytics & insights (Alt+3)">
-                  <NavLink
-                    to="/analytics"
-                    className={({ isActive }) =>
-                      `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${
-                        isActive
-                          ? 'border-primary text-gray-900'
-                          : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                      }`
-                    }
-                  >
-                    Analytics
-                  </NavLink>
-                </Tooltip>
-                <Tooltip text="Meeting cost calculator">
-                  <NavLink
-                    to="/cost-calculator"
-                    className={({ isActive }) =>
-                      `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${
-                        isActive
-                          ? 'border-primary text-gray-900'
-                          : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                      }`
-                    }
-                  >
-                    Cost Calculator
-                  </NavLink>
-                </Tooltip>
-                <Tooltip text="Team comparison">
-                  <NavLink
-                    to="/teams"
-                    className={({ isActive }) =>
-                      `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${
-                        isActive
-                          ? 'border-primary text-gray-900'
-                          : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                      }`
-                    }
-                  >
-                    Teams
-                  </NavLink>
-                </Tooltip>
-                <Tooltip text="Settings & preferences">
-                  <NavLink
-                    to="/settings"
-                    className={({ isActive }) =>
-                      `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${
-                        isActive
-                          ? 'border-primary text-gray-900'
-                          : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                      }`
-                    }
-                  >
-                    Settings
-                  </NavLink>
-                </Tooltip>
+                <NavLink
+                  to="/dashboard"
+                  className={({ isActive }) =>
+                    `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${
+                      isActive
+                        ? 'border-primary text-gray-900'
+                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                    }`
+                  }
+                >
+                  Dashboard
+                </NavLink>
+                <NavLink
+                  to="/leaderboard"
+                  className={({ isActive }) =>
+                    `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${
+                      isActive
+                        ? 'border-primary text-gray-900'
+                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                    }`
+                  }
+                >
+                  Leaderboard
+                </NavLink>
+                <NavLink
+                  to="/analytics"
+                  className={({ isActive }) =>
+                    `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${
+                      isActive
+                        ? 'border-primary text-gray-900'
+                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                    }`
+                  }
+                >
+                  Analytics
+                </NavLink>
+                <NavLink
+                  to="/cost-calculator"
+                  className={({ isActive }) =>
+                    `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${
+                      isActive
+                        ? 'border-primary text-gray-900'
+                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                    }`
+                  }
+                >
+                  Cost Calculator
+                </NavLink>
+                <NavLink
+                  to="/teams"
+                  className={({ isActive }) =>
+                    `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${
+                      isActive
+                        ? 'border-primary text-gray-900'
+                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                    }`
+                  }
+                >
+                  Teams
+                </NavLink>
+                <NavLink
+                  to="/settings"
+                  className={({ isActive }) =>
+                    `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${
+                      isActive
+                        ? 'border-primary text-gray-900'
+                        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                    }`
+                  }
+                >
+                  Settings
+                </NavLink>
               </div>
             </div>
 
