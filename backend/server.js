@@ -10,8 +10,11 @@ const logger = require('./utils/logger');
 
 const app = express();
 
+// Replace lines 13-16 with:
 app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:3000',
+  origin: process.env.NODE_ENV === 'production' 
+    ? (process.env.FRONTEND_URL || 'http://localhost:3000')
+    : true, // Allow all origins in development
   credentials: true
 }));
 app.use(express.json());
