@@ -116,7 +116,7 @@ function AppContent() {
                 >
                   Analytics
                 </NavLink>
-                <NavLink
+                {/* <NavLink
                   to="/cost-calculator"
                   className={({ isActive }) =>
                     `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${
@@ -127,8 +127,8 @@ function AppContent() {
                   }
                 >
                   Cost Calculator
-                </NavLink>
-                <NavLink
+                </NavLink> */}
+                {/* <NavLink
                   to="/teams"
                   className={({ isActive }) =>
                     `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${
@@ -139,8 +139,8 @@ function AppContent() {
                   }
                 >
                   Teams
-                </NavLink>
-                <NavLink
+                </NavLink> */}
+                {/* <NavLink
                   to="/settings"
                   className={({ isActive }) =>
                     `inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium transition-colors whitespace-nowrap ${
@@ -151,7 +151,7 @@ function AppContent() {
                   }
                 >
                   Settings
-                </NavLink>
+                </NavLink> */}
               </div>
             </div>
 
@@ -222,7 +222,7 @@ function AppContent() {
               >
                 Analytics
               </NavLink>
-              <NavLink
+              {/* <NavLink
                 to="/cost-calculator"
                 className={({ isActive }) =>
                   `block pl-3 pr-4 py-2 border-l-4 text-base font-medium ${
@@ -233,8 +233,8 @@ function AppContent() {
                 }
               >
                 Cost Calculator
-              </NavLink>
-              <NavLink
+              </NavLink> */}
+              {/* <NavLink
                 to="/teams"
                 className={({ isActive }) =>
                   `block pl-3 pr-4 py-2 border-l-4 text-base font-medium ${
@@ -257,7 +257,7 @@ function AppContent() {
                 }
               >
                 Settings
-              </NavLink>
+              </NavLink> */}
             </div>
           </div>
         </nav>
