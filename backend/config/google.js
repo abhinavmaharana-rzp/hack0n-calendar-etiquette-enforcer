@@ -10,29 +10,33 @@ const oauth2Client = new google.auth.OAuth2(
 
 // Service Account (for domain-wide delegation)
 let serviceAccountAuth = null;
-if (process.env.GOOGLE_SERVICE_ACCOUNT_KEY) {
+const serviceAccountPath = process.env.GOOGLE_SERVICE_ACCOUNT_JSON || process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
+
+if (serviceAccountPath) {
   try {
-    const keyFilePath = process.env.GOOGLE_SERVICE_ACCOUNT_KEY;
-    // Handle both relative and absolute paths
-    const resolvedPath = keyFilePath.startsWith('./') 
+    const keyFilePath = serviceAccountPath;
+    const resolvedPath = keyFilePath.startsWith('./')
       ? keyFilePath.replace('./backend/', './')
       : keyFilePath;
-    
+
     if (fs.existsSync(resolvedPath)) {
       const keyFile = JSON.parse(
         fs.readFileSync(resolvedPath, 'utf8')
       );
-      
+
       serviceAccountAuth = new google.auth.JWT({
         email: keyFile.client_email,
         key: keyFile.private_key,
         scopes: [
           'https://www.googleapis.com/auth/calendar',
           'https://www.googleapis.com/auth/calendar.events',
+          'https://www.googleapis.com/auth/calendar.readonly',
           'https://www.googleapis.com/auth/admin.directory.user.readonly'
         ],
-        subject: process.env.GOOGLE_ADMIN_EMAIL // Admin email for domain-wide delegation
+        subject: process.env.GOOGLE_ADMIN_EMAIL
       });
+
+      console.log('✅ Google Service Account configured for domain-wide delegation');
     } else {
       console.warn(`⚠️  Google service account file not found: ${resolvedPath}. Google Calendar features will be limited.`);
     }

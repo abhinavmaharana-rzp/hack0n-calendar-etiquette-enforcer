@@ -1,26 +1,25 @@
 {
   "name": "backend",
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
     "setup": "node scripts/setup-google-auth.js"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "keywords": ["calendar", "slack", "gamification", "meetings"],
+  "author": "Abhinav",
+  "license": "MIT",
+  "description": "Calendar Etiquette Enforcer Backend - Reactive polling architecture",
   "dependencies": {
     "@slack/bolt": "^4.6.0",
     "@slack/web-api": "^7.13.0",
-    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
     "googleapis": "^169.0.0",
-    "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.0.1",
+    "morgan": "^1.10.0",
     "node-cron": "^4.2.1"
   },
   "devDependencies": {

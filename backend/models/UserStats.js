@@ -3,36 +3,46 @@ const mongoose = require('mongoose');
 const UserStatsSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   name: String,
+  slackId: String,
   slackUserId: String,
   department: String,
-  
-  // Scores
+
+  // Core Stats
+  stats: {
+    agendaScore: { type: Number, default: 0 },
+    ghostScore: { type: Number, default: 0 },
+    streak: { type: Number, default: 0 }
+  },
+
+  // Detailed Scores (flat structure for backward compatibility)
   agendaScore: { type: Number, default: 0 },
   rsvpScore: { type: Number, default: 0 },
   ghostScore: { type: Number, default: 0 },
   punctualityScore: { type: Number, default: 0 },
-  
+
   // Counts
   meetingsOrganized: { type: Number, default: 0 },
   meetingsWithAgenda: { type: Number, default: 0 },
   meetingsAttended: { type: Number, default: 0 },
   rsvpsOnTime: { type: Number, default: 0 },
   rsvpsIgnored: { type: Number, default: 0 },
-  
-  // Badges
-  badges: [{
+
+  // Badges (supports both string array and object array)
+  badges: [String],
+  badgeDetails: [{
     type: { type: String },
     earnedAt: { type: Date, default: Date.now },
     metadata: mongoose.Schema.Types.Mixed
   }],
-  
+
   // Streaks
   currentRSVPStreak: { type: Number, default: 0 },
   bestRSVPStreak: { type: Number, default: 0 },
   lastRSVPDate: Date,
-  
+  streak: { type: Number, default: 0 },
+
   // Preferences
-  preferredReminderTime: { type: Number, default: 24 }, // hours before meeting
+  preferredReminderTime: { type: Number, default: 24 },
   optOutReminders: { type: Boolean, default: false }
 }, {
   timestamps: true

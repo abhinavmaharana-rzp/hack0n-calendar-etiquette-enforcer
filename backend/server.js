@@ -1,13 +1,15 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const cron = require('node-cron');
 const connectDB = require('./config/database');
 const reminderService = require('./services/reminderService');
+const googleService = require('./services/googleService');
+const { initializeBot, startBot } = require('./bot');
 const logger = require('./utils/logger');
 
 const app = express();
 
-// Middleware
 app.use(cors({
   origin: process.env.FRONTEND_URL || 'http://localhost:3000',
   credentials: true
@@ -15,18 +17,18 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Request logging
 app.use((req, res, next) => {
   logger.info(`${req.method} ${req.path}`, { ip: req.ip });
   next();
 });
 
-// Routes
 app.use('/api/events', require('./routes/events'));
 app.use('/api/dashboard', require('./routes/dashboard'));
 app.use('/api/webhooks', require('./routes/webhooks'));
 app.use('/api/admin', require('./routes/admin'));
 app.use('/api/demo', require('./routes/demo'));
+app.use('/api/leaderboard', require('./routes/leaderboard'));
+app.use('/api/user', require('./routes/user'));
 
 // Health check
 app.get('/health', (req, res) => {
@@ -56,46 +58,56 @@ const PORT = process.env.PORT || 5000;
 
 async function start() {
   try {
-    // Connect to MongoDB
     await connectDB();
-    logger.info('Database connected');
+    logger.info('✅ Database connected');
 
-    // Start reminder service
     reminderService.start();
-    logger.info('Reminder service started');
+    logger.info('✅ Reminder service started');
 
-    // Start Slack bot (optional - skip if not configured)
+    await initializeBot();
+
     try {
-      const hasValidToken = process.env.SLACK_BOT_TOKEN && 
+      const hasValidToken = process.env.SLACK_BOT_TOKEN &&
                            process.env.SLACK_BOT_TOKEN !== 'xoxb-your-bot-token-here' &&
                            process.env.SLACK_BOT_TOKEN.startsWith('xoxb-');
-      
+
       if (hasValidToken && process.env.SLACK_APP_TOKEN) {
-        // Start Slack bot in a separate process to avoid blocking
-        setTimeout(() => {
-          try {
-            require('../slack-bot/app');
-            logger.info('Slack bot started');
-          } catch (slackError) {
-            logger.warn('Slack bot failed to start:', slackError.message);
-            logger.info('Continuing without Slack bot (demo mode)');
-          }
-        }, 1000);
+        await startBot();
+        logger.info('✅ Slack bot started in Socket Mode');
       } else {
-        logger.info('Slack bot skipped (not configured)');
+        logger.info('⚠️  Slack bot skipped (not configured)');
       }
     } catch (error) {
-      logger.warn('Slack bot initialization error:', error.message);
+      logger.warn('⚠️  Slack bot initialization error:', error.message);
       logger.info('Continuing without Slack bot (demo mode)');
     }
 
-    // Start Express server
+    const pollIntervalSeconds = parseInt(process.env.POLL_INTERVAL_SECONDS) || 30;
+    const cronExpression = pollIntervalSeconds === 30 ? '*/30 * * * * *' : `*/${pollIntervalSeconds} * * * * *`;
+
+    logger.info(`🔄 Setting up calendar polling: every ${pollIntervalSeconds} seconds`);
+
+    cron.schedule(cronExpression, async () => {
+      try {
+        await googleService.pollNewEvents();
+      } catch (error) {
+        logger.error('Error in polling cron job:', error);
+      }
+    });
+
+    logger.info('✅ Calendar polling cron job initialized');
+
     app.listen(PORT, () => {
-      logger.info(`Server running on port ${PORT}`);
-      logger.info(`Environment: ${process.env.NODE_ENV || 'development'}`);
+      logger.info(`🚀 Server running on port ${PORT}`);
+      logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
+      logger.info(`🌐 API available at http://localhost:${PORT}`);
+      logger.info(`📋 Dashboard Stats: GET /api/dashboard/stats`);
+      logger.info(`🏆 Leaderboard: GET /api/leaderboard`);
+      logger.info(`👤 User Stats: GET /api/user/:email`);
+      logger.info(`🔧 Admin Sync: POST /api/admin/sync`);
     });
   } catch (error) {
-    logger.error('Failed to start server:', error);
+    logger.error('❌ Failed to start server:', error);
     process.exit(1);
   }
 }

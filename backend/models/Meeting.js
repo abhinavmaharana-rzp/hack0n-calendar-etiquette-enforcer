@@ -3,6 +3,11 @@ const mongoose = require('mongoose');
 const AttendeeSchema = new mongoose.Schema({
   email: { type: String, required: true },
   name: String,
+  status: {
+    type: String,
+    enum: ['needsAction', 'accepted', 'declined', 'tentative'],
+    default: 'needsAction'
+  },
   responseStatus: {
     type: String,
     enum: ['needsAction', 'accepted', 'declined', 'tentative'],
@@ -14,36 +19,44 @@ const AttendeeSchema = new mongoose.Schema({
 });
 
 const MeetingSchema = new mongoose.Schema({
-  eventId: { type: String, required: true, unique: true },
-  calendarId: { type: String, required: true },
+  googleEventId: { type: String, required: true, unique: true },
+  eventId: { type: String, required: true },
+  calendarId: { type: String, required: true, default: 'primary' },
   summary: { type: String, required: true },
-  
-  // Agenda
+
+  // Agenda Detection
+  hasAgenda: { type: Boolean, default: false },
+  isProcessed: { type: Boolean, default: false },
+  agendaAddedAt: Date,
+
+  // Agenda Details
   agenda: {
     purpose: String,
     outcomes: String,
     decisions: String,
     prereads: String,
-    raw: { type: String, required: true }
+    raw: String
   },
-  
+  description: String,
+
   // Organizer
+  creatorEmail: { type: String, required: true },
   creator: { type: String, required: true },
   creatorName: String,
-  
+
   // Attendees
   attendees: [AttendeeSchema],
   mandatoryAttendees: [String],
-  
+
   // Timing
   startTime: { type: Date, required: true },
   endTime: { type: Date, required: true },
   timezone: { type: String, default: 'Asia/Kolkata' },
-  
+
   // Location
   location: String,
   roomCapacity: Number,
-  
+
   // Status
   status: {
     type: String,
@@ -51,16 +64,18 @@ const MeetingSchema = new mongoose.Schema({
     default: 'scheduled'
   },
   cancellationReason: String,
-  
+
   // Metadata
   meetingLink: String,
   recurringEventId: String,
   isRecurring: { type: Boolean, default: false },
-  
+
   // Tracking
   agendaQualityScore: { type: Number, min: 0, max: 100 },
   rsvpRate: { type: Number, default: 0 },
-  wasRoomReleased: { type: Boolean, default: false }
+  wasRoomReleased: { type: Boolean, default: false },
+  warningsSent: { type: Number, default: 0 },
+  lastWarningSent: Date
 }, {
   timestamps: true
 });
